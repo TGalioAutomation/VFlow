@@ -18,6 +18,14 @@
 
 [**Website & Live Demo**](https://tgalioautomation.github.io/VFlow/) • [**Download Latest Release**](https://github.com/TGalioAutomation/VFlow/releases/latest) • [**Release Notes**](RELEASE_NOTES.md) • [**Bug Audit Report**](BUG_AUDIT_REPORT.md)
 
+<br/>
+
+<a href="https://tgalioautomation.github.io/VFlow/#video-guide">
+  <img src="docs/assets/vflow-demo.gif" alt="VFlow Interactive Demo & Tutorial (1080p macOS Sequoia)" width="880" style="border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.5);" />
+</a>
+
+<p><em>🎬 Xem video demo 1080p đầy đủ có âm thanh gõ phím cơ học và chime tại: <a href="https://tgalioautomation.github.io/VFlow/#video-guide"><strong>tgalioautomation.github.io/VFlow/#video-guide</strong></a></em></p>
+
 </div>
 
 ---

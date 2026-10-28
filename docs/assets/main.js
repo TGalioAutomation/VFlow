@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initInteractiveDemo();
   initMenuBarBadgeToggle();
   initCopyButtons();
+  initVideoChapterSeek();
 });
 
 /* ==============================================================================
@@ -460,6 +461,20 @@ function initCopyButtons() {
           setTimeout(() => { btn.textContent = orig; }, 1400);
         });
       }
+    });
+  });
+}
+
+function initVideoChapterSeek() {
+  const video = document.getElementById('vflowDemoVideo');
+  const seekButtons = document.querySelectorAll('.video-chapter-pill[data-video-seek]');
+  if (!video || !seekButtons.length) return;
+
+  seekButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sec = parseFloat(btn.getAttribute('data-video-seek') || '0');
+      video.currentTime = sec;
+      video.play().catch(() => {});
     });
   });
 }
