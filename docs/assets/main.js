@@ -1,6 +1,6 @@
 /**
- * VFlow — Flagship Promotional Landing Website
- * Interactive Pain-Point Resolver, Voice-to-AI Polish Simulator & 120fps Silk Sine-Wave HUD
+ * VFlow — Visual-First Flagship Landing Page
+ * Auto-Playing Killer Feature Showcase, Tab-Tab Shimmer & 120fps Silk Sine-Wave HUD
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,8 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ==============================================================================
-   1. 120fps Silk Sine-Wave Canvas Engine (Prototype v8 Replica)
-   Two-layer Cyan (#38BDF8) & Violet (#A855F7) undulating smooth curves
+   1. 120fps Silk Sine-Wave Canvas Engine
    ============================================================================== */
 function initSineWaveCanvas() {
   const canvas = document.getElementById('waveCanvas');
@@ -36,7 +35,6 @@ function initSineWaveCanvas() {
     amplitude += (targetAmplitude - amplitude) * 0.12;
     const midY = height / 2;
 
-    // Layer 1: Violet Sine Wave (Back layer)
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(168, 85, 247, 0.78)';
     ctx.lineWidth = 1.4;
@@ -47,7 +45,6 @@ function initSineWaveCanvas() {
     }
     ctx.stroke();
 
-    // Layer 2: Cyan Sine Wave (Front layer)
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.96)';
     ctx.lineWidth = 1.6;
@@ -64,7 +61,7 @@ function initSineWaveCanvas() {
 
   renderWave();
 
-  window.triggerWavePulse = function(boost = 7.8, durationMs = 320) {
+  window.triggerWavePulse = function(boost = 8.0, durationMs = 320) {
     targetAmplitude = boost;
     setTimeout(() => {
       targetAmplitude = 4.5;
@@ -73,12 +70,13 @@ function initSineWaveCanvas() {
 }
 
 /* ==============================================================================
-   2. Interactive Live Typing, Voice Dictation & 3-Tier Suggestion Engine
+   2. Visual-First Interactive & Auto-Playing Showcase
    ============================================================================== */
 function initInteractiveDemo() {
   const input = document.getElementById('demoInput');
   const editorBox = document.getElementById('demoEditorBox');
-  const scenarioHint = document.getElementById('demoScenarioHint');
+  const beforeBadge = document.getElementById('demoBeforeBadge');
+  const afterBadge = document.getElementById('demoAfterBadge');
   const shimmerToast = document.getElementById('shimmerToast');
   const voiceSimBtn = document.getElementById('simulateVoiceBtn');
   const hudContainer = document.getElementById('simulatedHud');
@@ -91,168 +89,112 @@ function initInteractiveDemo() {
 
   const demoScenarios = {
     'voice_ai': {
-      hint: '💡 Nỗi đau #03: Đọc giọng nói tự nhiên có nhịp nghỉ 2.2s → Tự điền vào ô text → Nhấn Tab-Tab để AI chuốt lại văn nói lủng củng.',
-      text: 'Hình như là sau khi anh nhận diện cái phần giọng nói sang nhưng mà đúng ra đến có 1 thao tác AI',
+      before: '❌ Văn nói: "Hình như là cái phần giọng nói sang nhưng mà cần 1 thao tác AI"',
+      after: '✅ Nhấn Tab-Tab ➔ "Sau khi nhận diện giọng nói sang text, cần một thao tác AI."',
+      text: 'Hình như là sau khi nhận diện cái phần giọng nói sang nhưng mà đúng ra cần có 1 thao tác AI',
       t1: {
         key: '⇥',
         icon: '⚡',
-        label: 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI',
+        label: 'Sau khi nhận diện cái phần giọng nói sang text...',
         fullText: 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI.',
-        kind: 'diacritic'
       },
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: '…giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại.',
-        fullText: 'Sau khi nhận diện giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại.',
-        kind: 'polish'
+        label: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI.',
+        fullText: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI.',
       },
       t3: {
         key: '⌥3',
         icon: '🔮',
-        label: 'tức thì',
-        fullText: 'Sau khi nhận diện giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại tức thì.',
-        kind: 'predict'
+        label: 'tự động',
+        fullText: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI tự động.',
       },
-      status: '🎙️ Voice → ✨ AI'
-    },
-    'long_sentence': {
-      hint: '💡 Nỗi đau #02: Viết đoạn văn rất dài, có dấu chấm ngắt câu và nghỉ nhịp suy nghĩ — VFlow vẫn giữ trọn ngữ cảnh và thu gọn hiển thị thông minh.',
-      text: 'hom nay toi da danh rat nhieu thoi gian de kiem tra he thong goi y cau dai tren macos. khi nguoi dung nghi mot lat roi go tiep',
-      t1: {
-        key: '⇥',
-        icon: '⚡',
-        label: '…khi người dùng nghỉ một lát rồi gõ tiếp',
-        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp',
-        kind: 'diacritic'
-      },
-      t2: {
-        key: '⇥⇥',
-        icon: '✨',
-        label: '…Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh.',
-        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh.',
-        kind: 'polish'
-      },
-      t3: {
-        key: '⌥3',
-        icon: '🔮',
-        label: 'mượt mà',
-        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh mượt mà.',
-        kind: 'predict'
-      },
-      status: '🧠 Full Context'
-    },
-    'en_grammar': {
-      hint: '💡 Nỗi đau #04: Gõ nhanh tiếng Anh bị sai chia động từ ("she dont know", "i goes") — Tầng 2 ✨ tự động phát hiện và sửa ngữ pháp.',
-      text: 'she dont know how to fix this issue and i goes to check the server log',
-      t1: {
-        key: '⇥',
-        icon: '⚡',
-        label: "She doesn't know how to fix this issue",
-        fullText: "She doesn't know how to fix this issue and I go to check the server log",
-        kind: 'diacritic'
-      },
-      t2: {
-        key: '⇥⇥',
-        icon: '✨',
-        label: "She doesn't know how to fix this issue, so I went to check the server logs.",
-        fullText: "She doesn't know how to fix this issue, so I went to check the server logs.",
-        kind: 'polish'
-      },
-      t3: {
-        key: '⌥3',
-        icon: '🔮',
-        label: 'immediately',
-        fullText: "She doesn't know how to fix this issue, so I went to check the server logs immediately.",
-        kind: 'predict'
-      },
-      status: '🇬🇧 EN Grammar'
-    },
-    'to dang lam viec': {
-      hint: '💡 Nỗi đau #04: Lỗi chính tả theo ngữ cảnh tiếng Việt ("to đang" → "tôi đang", "không cau" → "không dấu") mà bộ kiểm tra từ đơn bó tay.',
-      text: 'to dang lam viec tren may mac nhung go nhanh hay bi khong cau',
-      t1: {
-        key: '⇥',
-        icon: '⚡',
-        label: 'tôi đang làm việc trên máy Mac nhưng gõ nhanh hay bị không dấu',
-        fullText: 'tôi đang làm việc trên máy Mac nhưng gõ nhanh hay bị không dấu',
-        kind: 'diacritic'
-      },
-      t2: {
-        key: '⇥⇥',
-        icon: '✨',
-        label: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu.',
-        fullText: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu.',
-        kind: 'polish'
-      },
-      t3: {
-        key: '⌥3',
-        icon: '🔮',
-        label: 'tiếng Việt',
-        fullText: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu tiếng Việt.',
-        kind: 'predict'
-      },
-      status: '🇻🇳 VI Context'
+      status: '🎙️ Voice ➔ ✨ AI'
     },
     'ary': {
-      hint: '💡 Nỗi đau #01: Đang bật bộ gõ tiếng Việt nhưng gõ tiếng Anh & biến code ("salary", "arrow", "service", "subclass") không bị nhảy dấu.',
-      text: 'const salary = calculateArrow(service, subclass, currentError);',
+      before: '❌ Bộ gõ cũ: sảlảy, arổw, sẻvice, subclás',
+      after: '✅ VFlow giữ nguyên: salary, arrow, service, subclass',
+      text: 'const salary = calculateArrow(service, subclass);',
       t1: {
         key: '⇥',
         icon: '⚡',
-        label: 'const salary = calculateArrow(service, subclass, currentError);',
-        fullText: 'const salary = calculateArrow(service, subclass, currentError);',
-        kind: 'diacritic'
+        label: 'const salary = calculateArrow(service, subclass);',
+        fullText: 'const salary = calculateArrow(service, subclass);',
       },
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: 'English & Code Auto-Escape: Bảo toàn 100% không nhảy dấu',
-        fullText: 'const salary = calculateArrow(service, subclass, currentError);',
-        kind: 'polish'
+        label: '🛡️ Không nhảy dấu Tiếng Anh & Code (0 cần tắt bộ gõ)',
+        fullText: 'const salary = calculateArrow(service, subclass);',
       },
       t3: {
         key: '⌥3',
         icon: '🔮',
         label: 'return salary;',
-        fullText: 'const salary = calculateArrow(service, subclass, currentError);\nreturn salary;',
-        kind: 'predict'
+        fullText: 'const salary = calculateArrow(service, subclass);\nreturn salary;',
       },
       status: '🛡️ Auto-Escape'
     },
-    'ko sao ca': {
-      hint: '💡 Gõ tắt tốc độ cao: Tự động bung các từ viết tắt thông dụng ("ko", "dc", "trc", "mn", "ntn") thành câu lịch sự, đầy đủ dấu.',
-      text: 'ko sao dc ma trc gio mn van dung ntn',
+    'en_grammar': {
+      before: '❌ Gõ vội: "to dang lam viec. she dont know how to fix"',
+      after: '✅ Nhấn Tab-Tab ➔ "Tôi đang làm việc. She doesn\'t know how to fix it."',
+      text: 'to dang lam viec. she dont know how to fix this bug',
       t1: {
         key: '⇥',
         icon: '⚡',
-        label: 'không sao được mà trước giờ mọi người vẫn dùng như thế nào',
-        fullText: 'không sao được mà trước giờ mọi người vẫn dùng như thế nào',
-        kind: 'diacritic'
+        label: "tôi đang làm việc. She doesn't know how to fix",
+        fullText: "tôi đang làm việc. She doesn't know how to fix this bug",
       },
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà.',
-        fullText: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà.',
-        kind: 'polish'
+        label: "Tôi đang làm việc. She doesn't know how to fix this bug.",
+        fullText: "Tôi đang làm việc. She doesn't know how to fix this bug.",
       },
       t3: {
         key: '⌥3',
         icon: '🔮',
-        label: 'bạn nhé',
-        fullText: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà bạn nhé.',
-        kind: 'predict'
+        label: 'right now',
+        fullText: "Tôi đang làm việc. She doesn't know how to fix this bug right now.",
       },
-      status: '⚡ Teencode'
+      status: '🇬🇧🇻🇳 Ngữ pháp'
+    },
+    'long_sentence': {
+      before: '❌ Cũ: Gõ câu dài hoặc chấm câu "." là mất ngữ cảnh',
+      after: '✅ VFlow: Giữ trọn cả đoạn dài & thu gọn "…" thông minh',
+      text: 'hom nay toi da danh nhieu thoi gian kiem tra he thong. khi nghi mot lat roi go tiep',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: '…khi nghỉ một lát rồi gõ tiếp',
+        fullText: 'Hôm nay tôi đã dành nhiều thời gian kiểm tra hệ thống. Khi nghỉ một lát rồi gõ tiếp',
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: '…Khi nghỉ một lát rồi gõ tiếp, ngữ cảnh vẫn chính xác.',
+        fullText: 'Hôm nay tôi đã dành nhiều thời gian kiểm tra hệ thống. Khi nghỉ một lát rồi gõ tiếp, ngữ cảnh vẫn chính xác.',
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: '100%',
+        fullText: 'Hôm nay tôi đã dành nhiều thời gian kiểm tra hệ thống. Khi nghỉ một lát rồi gõ tiếp, ngữ cảnh vẫn chính xác 100%.',
+      },
+      status: '🧠 Câu dài'
     }
   };
 
   let currentSuggestions = [];
   let lastTabTime = 0;
   let voiceInterval = null;
+  let autoCycleTimer = null;
+  let userInteracted = false;
+  const scenarioOrder = ['voice_ai', 'ary', 'en_grammar', 'long_sentence'];
+  let currentScenarioIndex = 0;
 
-  function smartEllipsis(str, maxLen = 58) {
+  function smartEllipsis(str, maxLen = 52) {
     if (!str || str.length <= maxLen) return str;
     return '…' + str.slice(-(maxLen - 1)).trimStart();
   }
@@ -264,46 +206,36 @@ function initInteractiveDemo() {
     let matched = forcedScenarioKey ? demoScenarios[forcedScenarioKey] : null;
 
     if (!matched) {
-      if (trimmed.includes('nhận diện') || trimmed.includes('giọng nói') || trimmed.includes('thao tác ai')) {
+      if (trimmed.includes('nhận diện') || trimmed.includes('giọng nói')) {
         matched = demoScenarios['voice_ai'];
-      } else if (trimmed.includes('danh rat nhieu') || trimmed.includes('nghi mot lat') || trimmed.length > 85) {
-        matched = demoScenarios['long_sentence'];
-      } else if (trimmed.includes('she dont') || trimmed.includes('i goes') || trimmed.includes('dont know')) {
-        matched = demoScenarios['en_grammar'];
-      } else if (trimmed.includes('to dang') || trimmed.includes('khong cau')) {
-        matched = demoScenarios['to dang lam viec'];
-      } else if (trimmed.includes('salary') || trimmed.includes('calculatearrow') || trimmed.includes('subclass')) {
+      } else if (trimmed.includes('salary') || trimmed.includes('calculatearrow')) {
         matched = demoScenarios['ary'];
-      } else if (trimmed.includes('ko sao') || trimmed.includes('trc gio') || trimmed.includes('ntn')) {
-        matched = demoScenarios['ko sao ca'];
+      } else if (trimmed.includes('she dont') || trimmed.includes('to dang')) {
+        matched = demoScenarios['en_grammar'];
+      } else if (trimmed.includes('nghi mot lat') || trimmed.length > 70) {
+        matched = demoScenarios['long_sentence'];
       } else if (trimmed.length > 0) {
-        const diacritics = autoDiacriticMock(rawText);
-        const polished = polishMock(rawText);
+        const polished = rawText.charAt(0).toUpperCase() + rawText.slice(1) + (/[.!?]$/.test(rawText) ? '' : '.');
         matched = {
-          hint: '💡 Đang phân tích trực tiếp câu bạn vừa gõ (Nhấn Tab-Tab để áp dụng ✨ AI Polish).',
+          before: '❌ Đang gõ: "' + smartEllipsis(rawText, 36) + '"',
+          after: '✅ Nhấn Tab-Tab để AI chuẩn hóa câu',
           text: rawText,
-          t1: { key: '⇥', icon: '⚡', label: smartEllipsis(diacritics), fullText: diacritics, kind: 'diacritic' },
-          t2: { key: '⇥⇥', icon: '✨', label: smartEllipsis(polished), fullText: polished, kind: 'polish' },
-          t3: { key: '⌥3', icon: '🔮', label: 'tiếp tục...', fullText: polished + ' ', kind: 'predict' },
-          status: '⚡ Realtime'
+          t1: { key: '⇥', icon: '⚡', label: smartEllipsis(rawText), fullText: rawText },
+          t2: { key: '⇥⇥', icon: '✨', label: smartEllipsis(polished), fullText: polished },
+          t3: { key: '⌥3', icon: '🔮', label: 'tiếp tục...', fullText: polished + ' ' },
+          status: '⚡ Live'
         };
       }
     }
 
     if (!matched || trimmed.length === 0) {
-      chipContainer.innerHTML = `
-        <span style="font-size: 12px; color: #94a3b8; font-style: italic;">
-          Gõ văn bản hoặc bấm nút 🎙️ để xem gợi ý 3 tầng tức thì...
-        </span>
-      `;
-      if (statusLabel) statusLabel.textContent = 'Ready';
+      chipContainer.innerHTML = `<span style="font-size: 12px; color: #94a3b8;">Gõ thử hoặc bấm nút kịch bản phía trên...</span>`;
       currentSuggestions = [];
       return;
     }
 
-    if (scenarioHint && matched.hint) {
-      scenarioHint.textContent = matched.hint;
-    }
+    if (beforeBadge && matched.before) beforeBadge.textContent = matched.before;
+    if (afterBadge && matched.after) afterBadge.textContent = matched.after;
 
     currentSuggestions = [matched.t1, matched.t2, matched.t3];
 
@@ -311,13 +243,16 @@ function initInteractiveDemo() {
     currentSuggestions.forEach((item, index) => {
       const chip = document.createElement('div');
       chip.className = `hud-chip tier-${index + 1}`;
-      chip.title = `Click để thay thế bằng: "${item.fullText}"`;
+      chip.title = `Click để thay thế: "${item.fullText}"`;
       chip.innerHTML = `
         <span class="chip-key">${item.key}</span>
         <span>${item.icon}</span>
         <span>${item.label}</span>
       `;
-      chip.addEventListener('click', () => applySuggestion(item, index === 1));
+      chip.addEventListener('click', () => {
+        stopAutoCycle();
+        applySuggestion(item, index === 1);
+      });
       chipContainer.appendChild(chip);
     });
 
@@ -330,7 +265,7 @@ function initInteractiveDemo() {
     if (withShimmer && editorBox && shimmerToast) {
       editorBox.classList.add('shimmer-active');
       shimmerToast.classList.add('visible');
-      if (window.triggerWavePulse) window.triggerWavePulse(9.5, 500);
+      if (window.triggerWavePulse) window.triggerWavePulse(9.5, 450);
 
       setTimeout(() => {
         input.value = item.fullText;
@@ -349,78 +284,75 @@ function initInteractiveDemo() {
   function showAppliedStatus() {
     if (statusLabel) {
       const orig = statusLabel.textContent;
-      statusLabel.textContent = '✓ Đã thay thế';
+      statusLabel.textContent = '✓ Đã sửa xong';
       statusLabel.style.color = '#34d399';
       setTimeout(() => {
         statusLabel.textContent = orig;
         statusLabel.style.color = '#7dd3fc';
-      }, 1300);
+      }, 1200);
     }
   }
 
-  function autoDiacriticMock(str) {
-    const map = {
-      'ko': 'không', 'dc': 'được', 'trc': 'trước', 'ntn': 'như thế nào',
-      'mn': 'mọi người', 'to': 'tôi', 'toi': 'tôi', 'dang': 'đang', 'lam': 'làm', 'viec': 'việc',
-      'thuong': 'thương', 'thuyet': 'thuyết', 'viet': 'Việt', 'nam': 'Nam',
-      'rat': 'rất', 'tot': 'tốt', 'chuan': 'chuẩn', 'hom': 'hôm', 'nay': 'nay',
-      'khong': 'không', 'cau': 'dấu', 'dont': "doesn't", 'goes': 'went'
-    };
-    return str.split(' ').map(w => map[w.toLowerCase()] || w).join(' ');
+  function stopAutoCycle() {
+    userInteracted = true;
+    if (autoCycleTimer) {
+      clearInterval(autoCycleTimer);
+      autoCycleTimer = null;
+    }
   }
 
-  function polishMock(str) {
-    let cleaned = autoDiacriticMock(str)
-      .replace(/hình như là\s+/gi, '')
-      .replace(/cái phần\s+/gi, '')
-      .replace(/nhưng mà\s+/gi, 'nhưng ')
-      .trim();
-    if (!cleaned) return str;
-    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-    if (!/[.!?]$/.test(cleaned)) cleaned += '.';
-    return cleaned;
-  }
+  // Auto-cycle visual showcase until user interacts
+  autoCycleTimer = setInterval(() => {
+    if (userInteracted || voiceInterval) return;
+    // First apply Tier 2 shimmer on current scenario, then switch scenario
+    if (currentSuggestions.length >= 2) {
+      applySuggestion(currentSuggestions[1], true);
+    }
+    setTimeout(() => {
+      if (userInteracted || voiceInterval) return;
+      currentScenarioIndex = (currentScenarioIndex + 1) % scenarioOrder.length;
+      const nextKey = scenarioOrder[currentScenarioIndex];
+      presetButtons.forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-preset') === nextKey);
+      });
+      const sc = demoScenarios[nextKey];
+      if (sc) {
+        input.value = sc.text;
+        updateSuggestions(sc.text, nextKey);
+      }
+    }, 1800);
+  }, 4600);
 
-  // Keyboard shortcut handler in editor (supports Tab and Double-Tab / Tab-Tab)
+  input.addEventListener('focus', stopAutoCycle);
+  input.addEventListener('input', (e) => {
+    stopAutoCycle();
+    updateSuggestions(e.target.value);
+  });
+
   input.addEventListener('keydown', (e) => {
+    stopAutoCycle();
     if (e.key === 'Tab' && currentSuggestions.length >= 2) {
       e.preventDefault();
       const now = performance.now();
       if (now - lastTabTime < 450) {
-        // Tab-Tab -> Tier 2 AI Polish with Shimmer Sweep!
         lastTabTime = 0;
         applySuggestion(currentSuggestions[1], true);
       } else {
         lastTabTime = now;
         applySuggestion(currentSuggestions[0], false);
       }
-    } else if (e.altKey && e.key === '1' && currentSuggestions.length >= 1) {
-      e.preventDefault();
-      applySuggestion(currentSuggestions[0], false);
-    } else if (e.altKey && e.key === '2' && currentSuggestions.length >= 2) {
-      e.preventDefault();
-      applySuggestion(currentSuggestions[1], true);
-    } else if (e.altKey && e.key === '3' && currentSuggestions.length >= 3) {
-      e.preventDefault();
-      applySuggestion(currentSuggestions[2], false);
-    } else if (e.key === 'Escape') {
-      hudContainer.style.opacity = hudContainer.style.opacity === '0' ? '1' : '0';
     }
   });
 
-  input.addEventListener('input', (e) => {
-    updateSuggestions(e.target.value);
-  });
-
-  // Preset buttons
   presetButtons.forEach(btn => {
     btn.addEventListener('click', () => {
+      stopAutoCycle();
       if (voiceInterval) {
         clearInterval(voiceInterval);
         voiceInterval = null;
         if (voiceSimBtn) {
           voiceSimBtn.classList.remove('recording');
-          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói (⌥Space)</span>';
+          voiceSimBtn.innerHTML = '<span>🎙️ Chạy thử Voice AI</span>';
         }
       }
 
@@ -436,9 +368,9 @@ function initInteractiveDemo() {
     });
   });
 
-  // Simulated Voice Dictation Button
   if (voiceSimBtn) {
     voiceSimBtn.addEventListener('click', () => {
+      stopAutoCycle();
       if (voiceInterval) {
         clearInterval(voiceInterval);
         voiceInterval = null;
@@ -449,21 +381,15 @@ function initInteractiveDemo() {
       });
 
       const spokenChunks = [
-        'Hình như là',
-        'Hình như là sau khi anh nhận diện',
-        'Hình như là sau khi anh nhận diện cái phần giọng nói sang',
-        'Hình như là sau khi anh nhận diện cái phần giọng nói sang… (nghỉ 1s nghĩ từ tiếng Anh)',
-        'Hình như là sau khi anh nhận diện cái phần giọng nói sang nhưng mà đúng ra đến có 1 thao tác AI'
+        'Hình như là sau khi nhận diện...',
+        'Hình như là sau khi nhận diện cái phần giọng nói sang… (nghỉ 2.2s)',
+        'Hình như là sau khi nhận diện cái phần giọng nói sang nhưng mà đúng ra cần có 1 thao tác AI'
       ];
 
       let step = 0;
       input.value = '';
       voiceSimBtn.classList.add('recording');
-      voiceSimBtn.innerHTML = '<span>🔴 Đang nghe (Chờ ngắt nói 2.2s)...</span>';
-      if (statusLabel) {
-        statusLabel.textContent = '🎙️ Listening...';
-        statusLabel.style.color = '#f87171';
-      }
+      voiceSimBtn.innerHTML = '<span>🔴 Đang nghe (2.2s)...</span>';
 
       voiceInterval = setInterval(() => {
         if (window.triggerWavePulse) window.triggerWavePulse(9.0, 260);
@@ -474,17 +400,16 @@ function initInteractiveDemo() {
           clearInterval(voiceInterval);
           voiceInterval = null;
           voiceSimBtn.classList.remove('recording');
-          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói (⌥Space)</span>';
-          if (statusLabel) statusLabel.style.color = '#7dd3fc';
-          // Auto-fill normalized transcript & present ✨ AI Polish chip
-          input.value = 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI.';
+          voiceSimBtn.innerHTML = '<span>🎙️ Chạy thử Voice AI</span>';
           updateSuggestions(input.value, 'voice_ai');
+          setTimeout(() => {
+            if (currentSuggestions[1]) applySuggestion(currentSuggestions[1], true);
+          }, 900);
         }
-      }, 420);
+      }, 480);
     });
   }
 
-  // Mode badge click in HUD
   if (modeBadge) {
     modeBadge.addEventListener('click', () => {
       if (modeBadge.textContent === 'VI·T') {
@@ -497,11 +422,9 @@ function initInteractiveDemo() {
         modeBadge.textContent = 'VI·T';
         modeBadge.style.color = '#38bdf8';
       }
-      if (window.triggerWavePulse) window.triggerWavePulse();
     });
   }
 
-  // Initial populate with default voice_ai scenario
   const defaultScenario = demoScenarios['voice_ai'];
   if (defaultScenario) {
     input.value = defaultScenario.text;
@@ -510,7 +433,7 @@ function initInteractiveDemo() {
 }
 
 /* ==============================================================================
-   3. Menu Bar Status Badge Toggle Simulation
+   3. Menu Bar Badge Toggle & Copy Button
    ============================================================================== */
 function initMenuBarBadgeToggle() {
   const badge = document.getElementById('menuBarBadge');
@@ -518,26 +441,12 @@ function initMenuBarBadgeToggle() {
 
   const states = ['[• VI·T]', '[• VI·V]', '[• EN]'];
   let idx = 0;
-
   badge.addEventListener('click', () => {
     idx = (idx + 1) % states.length;
     badge.textContent = states[idx];
-    if (idx === 0) {
-      badge.style.color = '#38bdf8';
-      badge.style.borderColor = 'rgba(56, 189, 248, 0.4)';
-    } else if (idx === 1) {
-      badge.style.color = '#c084fc';
-      badge.style.borderColor = 'rgba(192, 132, 252, 0.4)';
-    } else {
-      badge.style.color = '#94a3b8';
-      badge.style.borderColor = 'rgba(148, 163, 184, 0.3)';
-    }
   });
 }
 
-/* ==============================================================================
-   4. Copy to Clipboard Utility
-   ============================================================================== */
 function initCopyButtons() {
   const copyButtons = document.querySelectorAll('.copy-btn');
   copyButtons.forEach(btn => {
@@ -545,15 +454,10 @@ function initCopyButtons() {
       const targetSelector = btn.getAttribute('data-copy-target');
       const targetElement = document.querySelector(targetSelector);
       if (targetElement) {
-        const textToCopy = targetElement.textContent.trim();
-        navigator.clipboard.writeText(textToCopy).then(() => {
-          const originalText = btn.textContent;
+        navigator.clipboard.writeText(targetElement.textContent.trim()).then(() => {
+          const orig = btn.textContent;
           btn.textContent = 'Đã sao chép!';
-          btn.style.color = '#34d399';
-          setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.color = '';
-          }, 1500);
+          setTimeout(() => { btn.textContent = orig; }, 1400);
         });
       }
     });
