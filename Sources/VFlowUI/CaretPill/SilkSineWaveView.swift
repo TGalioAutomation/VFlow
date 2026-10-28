@@ -25,24 +25,38 @@ public struct SilkSineWaveView: View {
     }
 
     private var primaryWaveColor: Color {
-        switch severity {
-        case .normal:
-            return Color(red: 56/255, green: 189/255, blue: 248/255) // Cyan #38BDF8
-        case .moderate:
-            return Color(red: 251/255, green: 191/255, blue: 36/255) // Amber #FBBF24
-        case .high:
-            return Color(red: 251/255, green: 113/255, blue: 133/255) // Rose #FB7185
+        switch state {
+        case .working:
+            return Color(red: 168/255, green: 85/255, blue: 247/255) // AI Violet #A855F7
+        case .done:
+            return Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald #10B981
+        case .transcript:
+            switch severity {
+            case .normal:
+                return Color(red: 56/255, green: 189/255, blue: 248/255) // Cyan #38BDF8
+            case .moderate:
+                return Color(red: 251/255, green: 191/255, blue: 36/255) // Amber #FBBF24
+            case .high:
+                return Color(red: 251/255, green: 113/255, blue: 133/255) // Rose #FB7185
+            }
         }
     }
 
     private var secondaryWaveColor: Color {
-        switch severity {
-        case .normal:
-            return Color(red: 168/255, green: 85/255, blue: 247/255) // Violet #A855F7
-        case .moderate:
-            return Color(red: 249/255, green: 115/255, blue: 22/255) // Orange #F97316
-        case .high:
-            return Color(red: 225/255, green: 29/255, blue: 72/255) // Crimson #E11D48
+        switch state {
+        case .working:
+            return Color(red: 56/255, green: 189/255, blue: 248/255) // Electric Cyan #38BDF8
+        case .done:
+            return Color(red: 52/255, green: 211/255, blue: 153/255) // Mint Emerald #34D399
+        case .transcript:
+            switch severity {
+            case .normal:
+                return Color(red: 168/255, green: 85/255, blue: 247/255) // Violet #A855F7
+            case .moderate:
+                return Color(red: 249/255, green: 115/255, blue: 22/255) // Orange #F97316
+            case .high:
+                return Color(red: 225/255, green: 29/255, blue: 72/255) // Crimson #E11D48
+            }
         }
     }
 
@@ -67,11 +81,11 @@ public struct SilkSineWaveView: View {
                     targetAmp = (h * 0.42) * dynamicLevel
                     speed = severity == .high ? 5.2 : 4.2
                 case .working:
-                    targetAmp = h * 0.28
-                    speed = 2.8
+                    targetAmp = h * 0.46
+                    speed = 7.2
                 case .done:
-                    targetAmp = h * 0.12
-                    speed = 1.0
+                    targetAmp = h * 0.30
+                    speed = 3.0
                 }
 
                 // Layer 1: Primary Silk Sine-Wave

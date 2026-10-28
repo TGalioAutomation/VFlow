@@ -122,7 +122,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupLiveCaretHUD() {
-        CaretHUDModel.shared.onSelectSuggestion = { item in
+        CaretHUDModel.shared.onSelectSuggestion = { [weak self] item in
+            let frame = self?.currentCaretPillFrame()
+            CaretHUDModel.shared.triggerSuggestionAcceptFeedback(for: item, caretFrame: frame) {
+                EventTapHook.shared.notifyTypingState()
+            }
             EventTapHook.shared.applySuggestion(item)
         }
         CaretHUDModel.shared.onToggleInputMethod = {
@@ -175,11 +179,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        EventTapHook.shared.onSelectSuggestionShortcut = { index in
+        EventTapHook.shared.onSelectSuggestionShortcut = { [weak self] index in
             MainActor.assumeIsolated {
                 let suggestions = CaretHUDModel.shared.visibleSuggestions
                 guard index >= 0 && index < suggestions.count else { return false }
                 let chosen = suggestions[index]
+                let frame = self?.currentCaretPillFrame()
+                CaretHUDModel.shared.triggerSuggestionAcceptFeedback(for: chosen, caretFrame: frame) {
+                    EventTapHook.shared.notifyTypingState()
+                }
                 DispatchQueue.main.async {
                     EventTapHook.shared.applySuggestion(chosen)
                 }

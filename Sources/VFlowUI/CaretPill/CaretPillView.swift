@@ -14,6 +14,9 @@ public struct CaretPillView: View {
     public var severity: SuggestionSeverity
     public var acceptShortcut: SuggestionAcceptShortcut
     public var isDoubleTabArmed: Bool
+    public var isApplyingSuggestion: Bool
+    public var isSuggestionAppliedSuccess: Bool
+    public var appliedSuggestionText: String
     public var onUndo: () -> Void
     public var onCycleTone: () -> Void
     public var onSelectSuggestion: (SuggestionItem) -> Void
@@ -34,6 +37,9 @@ public struct CaretPillView: View {
         severity: SuggestionSeverity = .normal,
         acceptShortcut: SuggestionAcceptShortcut = .doubleTab,
         isDoubleTabArmed: Bool = false,
+        isApplyingSuggestion: Bool = false,
+        isSuggestionAppliedSuccess: Bool = false,
+        appliedSuggestionText: String = "",
         onUndo: @escaping () -> Void = {},
         onCycleTone: @escaping () -> Void = {},
         onSelectSuggestion: @escaping (SuggestionItem) -> Void = { _ in },
@@ -53,6 +59,9 @@ public struct CaretPillView: View {
         self.severity = severity
         self.acceptShortcut = acceptShortcut
         self.isDoubleTabArmed = isDoubleTabArmed
+        self.isApplyingSuggestion = isApplyingSuggestion
+        self.isSuggestionAppliedSuccess = isSuggestionAppliedSuccess
+        self.appliedSuggestionText = appliedSuggestionText
         self.onUndo = onUndo
         self.onCycleTone = onCycleTone
         self.onSelectSuggestion = onSelectSuggestion
@@ -80,6 +89,9 @@ public struct CaretPillView: View {
     }
 
     public var isLongCardMode: Bool {
+        if isApplyingSuggestion || isSuggestionAppliedSuccess {
+            return false
+        }
         if let first = visibleSuggestions.first,
            first.kind == .aiPolish,
            (first.text.count > 56 || first.text.contains("\n")) {
@@ -89,7 +101,16 @@ public struct CaretPillView: View {
     }
 
     public var body: some View {
-        let pillAccent = accentColor(for: effectiveSeverity)
+        let pillAccent: Color = {
+            if isApplyingSuggestion {
+                return Color(red: 168/255, green: 85/255, blue: 247/255) // AI Violet #A855F7
+            }
+            if isSuggestionAppliedSuccess {
+                return Color(red: 52/255, green: 211/255, blue: 153/255) // Emerald #34D399
+            }
+            return accentColor(for: effectiveSeverity)
+        }()
+        let isHighlightedFrame = isApplyingSuggestion || isSuggestionAppliedSuccess || isDoubleTabArmed || effectiveSeverity != .normal
 
         Group {
             if isLongCardMode, let first = visibleSuggestions.first {
@@ -110,16 +131,19 @@ public struct CaretPillView: View {
         .overlay(
             RoundedRectangle(cornerRadius: isLongCardMode ? 18 : 20, style: .continuous)
                 .stroke(
-                    pillAccent.opacity(effectiveSeverity == .normal ? 0.35 : 0.72),
-                    lineWidth: effectiveSeverity == .normal ? 1.0 : 1.35
+                    pillAccent.opacity(isHighlightedFrame ? 0.82 : 0.35),
+                    lineWidth: isHighlightedFrame ? 1.55 : 1.0
                 )
         )
         .shadow(
-            color: effectiveSeverity == .normal ? Color.black.opacity(0.35) : pillAccent.opacity(0.28),
-            radius: effectiveSeverity == .normal ? 8 : 11,
+            color: isHighlightedFrame ? pillAccent.opacity(0.36) : Color.black.opacity(0.35),
+            radius: isHighlightedFrame ? 12 : 8,
             x: 0,
             y: 4
         )
+        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: isApplyingSuggestion)
+        .animation(.spring(response: 0.26, dampingFraction: 0.80), value: isSuggestionAppliedSuccess)
+        .animation(.spring(response: 0.20, dampingFraction: 0.75), value: isDoubleTabArmed)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .coordinateSpace(name: "CaretPillRoot")
@@ -138,8 +162,56 @@ public struct CaretPillView: View {
 
             modeToggleButton(pillAccent: pillAccent)
 
-            // Block 2: Center Interactive Suggestions or Live Text Area
-            if !visibleSuggestions.isEmpty {
+            // Block 2: Center Interactive Suggestions, Rewrite Animation, or Live Text Area
+            if isApplyingSuggestion {
+                HStack(spacing: 6) {
+                    Text("✨ Đang sửa văn bản...")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(red: 216/255, green: 180/255, blue: 254/255))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(red: 168/255, green: 85/255, blue: 247/255).opacity(0.26))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(red: 192/255, green: 132/255, blue: 252/255).opacity(0.65), lineWidth: 0.9)
+                        )
+
+                    if !appliedSuggestionText.isEmpty {
+                        Text(appliedSuggestionText)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(red: 241/255, green: 245/255, blue: 249/255))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 320, alignment: .leading)
+                    }
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            } else if isSuggestionAppliedSuccess {
+                HStack(spacing: 6) {
+                    Text("✓ Đã sửa văn bản")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(red: 110/255, green: 231/255, blue: 183/255))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(red: 16/255, green: 185/255, blue: 129/255).opacity(0.24))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(red: 52/255, green: 211/255, blue: 153/255).opacity(0.65), lineWidth: 0.9)
+                        )
+
+                    if !appliedSuggestionText.isEmpty {
+                        Text(appliedSuggestionText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(red: 226/255, green: 232/255, blue: 240/255))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 320, alignment: .leading)
+                    }
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            } else if !visibleSuggestions.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(Array(visibleSuggestions.enumerated()), id: \.offset) { index, item in
                         suggestionChip(item: item, index: index)
@@ -192,12 +264,12 @@ public struct CaretPillView: View {
 
                 Button(action: { onSelectSuggestion(item) }) {
                     HStack(spacing: 5) {
-                        Text(acceptShortcut.shortBadge)
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        Text(isDoubleTabArmed ? "⇥ Nhấn Tab lần nữa" : acceptShortcut.shortBadge)
+                            .font(.system(size: 10, weight: .bold, design: isDoubleTabArmed ? .rounded : .monospaced))
                             .foregroundColor(isDoubleTabArmed ? Color.white : chipColor)
-                            .padding(.horizontal, isDoubleTabArmed ? 4 : 2)
+                            .padding(.horizontal, isDoubleTabArmed ? 6 : 2)
                             .padding(.vertical, 1)
-                            .background(isDoubleTabArmed ? chipColor.opacity(0.85) : chipColor.opacity(0.16))
+                            .background(isDoubleTabArmed ? chipColor.opacity(0.92) : chipColor.opacity(0.16))
                             .clipShape(Capsule())
 
                         Text(changedCount > 0
@@ -209,11 +281,11 @@ public struct CaretPillView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(chipColor.opacity(0.14))
+                    .background(chipColor.opacity(isDoubleTabArmed ? 0.25 : 0.14))
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(chipColor.opacity(0.42), lineWidth: 0.7)
+                            .stroke(chipColor.opacity(isDoubleTabArmed ? 0.85 : 0.42), lineWidth: isDoubleTabArmed ? 1.2 : 0.7)
                     )
                 }
                 .buttonStyle(.plain)
@@ -477,13 +549,13 @@ public struct CaretPillView: View {
         Button(action: { onSelectSuggestion(item) }) {
             HStack(spacing: 4) {
                 if index == 0 {
-                    Text(acceptShortcut.shortBadge)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    Text(isDoubleTabArmed ? "⇥ Nhấn Tab lần nữa" : acceptShortcut.shortBadge)
+                        .font(.system(size: 10, weight: .bold, design: isDoubleTabArmed ? .rounded : .monospaced))
                         .foregroundColor(isDoubleTabArmed ? Color.white : chipColor)
-                        .padding(.horizontal, isDoubleTabArmed ? 4 : 1)
-                        .padding(.vertical, isDoubleTabArmed ? 1 : 0)
+                        .padding(.horizontal, isDoubleTabArmed ? 6 : 1)
+                        .padding(.vertical, isDoubleTabArmed ? 2 : 0)
                         .background(
-                            isDoubleTabArmed ? chipColor.opacity(0.85) : Color.clear
+                            isDoubleTabArmed ? chipColor.opacity(0.92) : Color.clear
                         )
                         .clipShape(Capsule())
                 } else {

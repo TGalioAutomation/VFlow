@@ -920,5 +920,30 @@ final class VietnameseEngineTests: XCTestCase {
         XCTAssertTrue(cardHandled)
         await fulfillment(of: [cardClickExp], timeout: 1.0)
         XCTAssertEqual(selectedFromCard?.text, multiParaPolished)
+
+        // 5. Verify 2-Stage Visual Feedback Animation on Tab-Tab / Suggestion Accept ("✨ Đang sửa văn bản..." -> "✓ Đã sửa văn bản")
+        hud.triggerSuggestionAcceptFeedback(for: longItem, caretFrame: CGRect(x: 300, y: 300, width: 460, height: 52))
+        XCTAssertTrue(hud.isApplyingSuggestion)
+        XCTAssertFalse(hud.isSuggestionAppliedSuccess)
+        XCTAssertEqual(hud.state, .working)
+        XCTAssertTrue(hud.appliedSuggestionText.contains("Tôi đang không hiểu sao phần mềm bị lỗi."))
+
+        // Synchronous notifyTypingState() from applySuggestion during Stage 1 must NOT wipe out the active rewrite animation
+        hud.updateOnTyping(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: ["Tôi", "đang"],
+            inputMethod: .telex,
+            caretFrame: CGRect(x: 300, y: 300, width: 460, height: 52),
+            fullSentenceText: multiParaPolished
+        )
+        XCTAssertTrue(hud.isApplyingSuggestion)
+        XCTAssertEqual(hud.state, .working)
+
+        // After ~320ms, Stage 1 transitions to Stage 2 ("✓ Đã sửa văn bản" Emerald confirmation)
+        try? await Task.sleep(nanoseconds: 340_000_000)
+        XCTAssertFalse(hud.isApplyingSuggestion)
+        XCTAssertTrue(hud.isSuggestionAppliedSuccess)
+        XCTAssertEqual(hud.state, .done)
     }
 }

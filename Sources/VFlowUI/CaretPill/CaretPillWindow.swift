@@ -121,6 +121,9 @@ public final class CaretHUDModel: ObservableObject {
     @Published public var severity: SuggestionSeverity = .normal
     @Published public var acceptShortcut: SuggestionAcceptShortcut = .doubleTab
     @Published public var isDoubleTabArmed: Bool = false
+    @Published public var isApplyingSuggestion: Bool = false
+    @Published public var isSuggestionAppliedSuccess: Bool = false
+    @Published public var appliedSuggestionText: String = ""
 
     public var chipFrames: [Int: CGRect] = [:]
     public var modeButtonFrame: CGRect = .zero
@@ -135,6 +138,8 @@ public final class CaretHUDModel: ObservableObject {
     private var autoHideTimer: Timer?
     private var decayTimer: Timer?
     private var aiInferenceTask: Task<Void, Never>?
+    private var suggestionFeedbackTask: Task<Void, Never>?
+    private var lastCaretFrame: CGRect = CGRect(x: 400, y: 400, width: 460, height: 52)
     private var isHosted = false
 
     public init() {}
@@ -306,6 +311,54 @@ public final class CaretHUDModel: ObservableObject {
         return true
     }
 
+    /// Triggers a 2-stage visual animation (`✨ Đang sửa văn bản...` -> `✓ Đã sửa văn bản`) when a suggestion is accepted via `⇥⇥`, `⌥1..3`, or mouse click.
+    public func triggerSuggestionAcceptFeedback(
+        for item: SuggestionItem,
+        caretFrame: CGRect? = nil,
+        onFinished: (() -> Void)? = nil
+    ) {
+        ensureHosted()
+        aiInferenceTask?.cancel()
+        suggestionFeedbackTask?.cancel()
+        decayTimer?.invalidate()
+
+        let frame = caretFrame ?? lastCaretFrame
+        lastCaretFrame = frame
+
+        let preview = item.text.replacingOccurrences(of: "\n", with: " ↵ ")
+        self.isDoubleTabArmed = false
+        self.isApplyingSuggestion = true
+        self.isSuggestionAppliedSuccess = false
+        self.appliedSuggestionText = preview
+        self.state = .working
+        self.audioLevel = 1.0
+        self.suggestions = []
+
+        CaretPillWindow.shared.present(at: frame)
+        resetAutoHideTimer(seconds: 6.0)
+
+        suggestionFeedbackTask = Task { @MainActor [weak self] in
+            // Stage 1: 280ms Violet-Cyan AI Rewrite Pulse ("✨ Đang sửa văn bản...")
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard !Task.isCancelled, let self = self else { return }
+
+            // Stage 2: 1100ms Emerald Checkmark Confirmation ("✓ Đã sửa văn bản")
+            self.isApplyingSuggestion = false
+            self.isSuggestionAppliedSuccess = true
+            self.state = .done
+            self.audioLevel = 0.45
+            CaretPillWindow.shared.present(at: self.lastCaretFrame)
+
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            guard !Task.isCancelled else { return }
+
+            self.isSuggestionAppliedSuccess = false
+            self.appliedSuggestionText = ""
+            self.state = .transcript
+            onFinished?()
+        }
+    }
+
     /// Triggers a visual wave pulse and refreshes suggestions when a keystroke occurs.
     public func updateOnTyping(
         currentWord: String,
@@ -317,14 +370,29 @@ public final class CaretHUDModel: ObservableObject {
         wordAfterCursor: String = ""
     ) {
         ensureHosted()
+        self.lastCaretFrame = caretFrame
         self.currentWord = currentWord
         self.inputMethod = inputMethod
-        self.state = .transcript
 
         let fullSentence = !fullSentenceText.isEmpty
             ? fullSentenceText
             : (sentenceWords + (currentWord.isEmpty ? [] : [currentWord])).joined(separator: " ")
         self.text = fullSentence
+
+        // While Stage 1 ("✨ Đang sửa văn bản...") is actively animating right after applySuggestion,
+        // keep the visual rewrite feedback on screen instead of immediately overwriting it.
+        if self.isApplyingSuggestion {
+            return
+        }
+
+        // If the user types a new character while Stage 2 ("✓ Đã sửa văn bản") is showing, cancel it and return to live suggestions.
+        if self.isSuggestionAppliedSuccess {
+            suggestionFeedbackTask?.cancel()
+            self.isSuggestionAppliedSuccess = false
+            self.appliedSuggestionText = ""
+        }
+
+        self.state = .transcript
 
         var immediateSuggestions = SuggestionEngine.suggest(
             currentWord: currentWord,
@@ -531,6 +599,9 @@ public struct CaretHUDContainerView: View {
             severity: model.severity,
             acceptShortcut: model.acceptShortcut,
             isDoubleTabArmed: model.isDoubleTabArmed,
+            isApplyingSuggestion: model.isApplyingSuggestion,
+            isSuggestionAppliedSuccess: model.isSuggestionAppliedSuccess,
+            appliedSuggestionText: model.appliedSuggestionText,
             onUndo: { model.onUndo?() },
             onCycleTone: { model.onCycleTone?() },
             onSelectSuggestion: { item in model.onSelectSuggestion?(item) },
