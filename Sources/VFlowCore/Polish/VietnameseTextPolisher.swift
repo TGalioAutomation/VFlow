@@ -112,6 +112,27 @@ public struct VietnameseTextPolisher: Sendable {
         return polishSingleParagraph(trimmed, tone: tone)
     }
 
+    /// Generates an AI-style written refinement from a spoken voice transcript by removing conversational redundancies
+    /// (`"cái phần"`, `"cái tính năng"`, `"xem là"`, `"nhưng mà"`, `"hình như là"`) and tightening phrasing.
+    public static func polishVoiceRefinement(_ text: String, tone: PolishTone = .natural) -> String {
+        var refined = polish(text, tone: tone)
+        let spokenToWrittenRules: [(String, String)] = [
+            ("(?i)\\bcái\\s+(?=phần|tính\\s+năng|chức\\s+năng|vấn\\s+đề|lỗi|việc|bộ\\s+gõ|hệ\\s+thống)\\b", ""),
+            ("(?i)\\bxem\\s+là\\s+(?=nó|đã|có|chưa)\\b", "xem "),
+            ("(?i)\\bnhưng\\s+mà\\b", "nhưng"),
+            ("(?i)\\bhình\\s+như\\s+là\\b", "Hình như"),
+            ("(?i)\\bcó\\s+1\\s+(?=thao\\s+tác|bước|tính\\s+năng|vấn\\s+đề|lỗi|câu)\\b", "có một ")
+        ]
+        for (pattern, replacement) in spokenToWrittenRules {
+            refined = refined.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
+        }
+        refined = normalizePunctuation(refined)
+        if let first = refined.first, first.isLowercase {
+            refined = first.uppercased() + refined.dropFirst()
+        }
+        return refined
+    }
+
     private static func polishSingleParagraph(_ paragraph: String, tone: PolishTone) -> String {
         // Normalize spaces before punctuation first so "pháp . cho" becomes "pháp. cho"
         let preNormalized = normalizePunctuation(paragraph)
@@ -741,7 +762,15 @@ public struct VietnameseTextPolisher: Sendable {
             ("van\\s+de\\b", "vấn đề"),
             ("ngữ\\s+canh\\b", "ngữ cảnh"),
             ("ngu\\s+canh\\b", "ngữ cảnh"),
-            ("kịch\\s+(?=verify|test|kiểm\\s+tra|kiểm\\s+thử)\\b", "kịch bản ")
+            ("kịch\\s+(?=verify|test|kiểm\\s+tra|kiểm\\s+thử)\\b", "kịch bản "),
+            ("phần\\s+tách\\s+chưa\\s+tết", "phần text chưa, text"),
+            ("phần\\s+tách\\b", "phần text"),
+            ("phần\\s+năng\\s+tự\\s+lắng\\s+nghe", "tính năng tự lắng nghe"),
+            ("phần\\s+năng\\b", "tính năng"),
+            ("giọng\\s+nói\\s+sang\\s+(?=nhưng|mà|thì)", "giọng nói sang text "),
+            ("đúng\\s+ra\\s+đến\\s+có", "đúng ra cần có"),
+            ("đúng\\s+ra\\s+đến\\b", "đúng ra cần"),
+            ("sau\\s+khi\\s+anh\\s+nhận\\s+diện", "sau khi nhận diện")
         ]
         for (wrong, right) in phraseRepairs {
             joined = joined.replacingOccurrences(of: "(?i)\\b" + wrong + "\\b", with: right, options: .regularExpression)

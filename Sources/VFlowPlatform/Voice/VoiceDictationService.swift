@@ -23,7 +23,7 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
     public var autoStopOnSilence: Bool = true
 
     /// Silence duration (in seconds) after the last recognized word before automatically finalizing & injecting text.
-    public var silenceTimeoutSeconds: TimeInterval = 1.25
+    public var silenceTimeoutSeconds: TimeInterval = 2.2
 
     /// Fired on the main thread whenever partial speech recognition text or RMS audio level updates.
     public var onPartialTranscript: (@Sendable (_ partialText: String, _ audioLevel: Float) -> Void)?
@@ -378,9 +378,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             let elapsedSinceVoice = now - self.lastVoiceAudioActivityTime
 
             // Trigger auto-stop & auto-inject when the user pauses speaking:
-            // - 1.25s without any new recognized words AND >= 0.60s of quiet microphone RMS, OR
-            // - 2.0s without any new recognized words regardless of ambient background hum.
-            if (elapsedSinceWord >= self.silenceTimeoutSeconds && elapsedSinceVoice >= 0.60) || elapsedSinceWord >= 2.0 {
+            // - >= 2.2s without any new recognized words AND >= 0.90s of quiet microphone RMS, OR
+            // - >= 3.2s without any new recognized words regardless of ambient background hum.
+            if (elapsedSinceWord >= self.silenceTimeoutSeconds && elapsedSinceVoice >= 0.90) || elapsedSinceWord >= 3.2 {
                 self.logVoice(String(format: "AUTO_STOP_ON_SILENCE elapsedWord=%.2fs elapsedVoice=%.2fs text='%@'", elapsedSinceWord, elapsedSinceVoice, trimmed))
                 self.stopRecordingInternal()
             }
@@ -497,9 +497,12 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             let text = (note.userInfo?["text"] as? String) ?? ""
             let level = (note.userInfo?["audioLevel"] as? Float) ?? self.audioLevel
             self.audioLevel = level
+            let now = CFAbsoluteTimeGetCurrent()
+            if level >= 0.31 {
+                self.lastVoiceAudioActivityTime = now
+            }
             if !text.isEmpty {
                 if text != self.transcript {
-                    let now = CFAbsoluteTimeGetCurrent()
                     self.lastTranscriptChangeTime = now
                     self.lastVoiceAudioActivityTime = now
                 }

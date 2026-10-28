@@ -310,6 +310,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     CaretHUDModel.shared.presentVoiceCompleted(
                         polishedText: polished,
+                        rawVoiceText: trimmedRaw,
                         caretFrame: frame
                     )
                 } else if let extApp = self.lastExternalActiveApp, !extApp.isTerminated {
@@ -326,11 +327,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     CaretHUDModel.shared.presentVoiceCompleted(
                         polishedText: polished,
+                        rawVoiceText: trimmedRaw,
                         caretFrame: updatedFrame
                     )
                 } else {
                     CaretHUDModel.shared.presentVoiceCompleted(
                         polishedText: polished,
+                        rawVoiceText: trimmedRaw,
                         caretFrame: frame
                     )
                 }

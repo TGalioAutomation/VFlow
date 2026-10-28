@@ -1129,12 +1129,25 @@ final class VietnameseEngineTests: XCTestCase {
 
     @MainActor
     func testVoiceDictationAutoStopOnSilenceAndCaretHUDClick() async {
-        // 1. Verify VoiceDictationService autoStopOnSilence is enabled by default with ~1.25s silence timeout
+        // 1. Verify VoiceDictationService autoStopOnSilence is enabled by default with ~2.2s silence timeout
         let service = VoiceDictationService.shared
         XCTAssertTrue(service.autoStopOnSilence)
-        XCTAssertEqual(service.silenceTimeoutSeconds, 1.25, accuracy: 0.05)
+        XCTAssertEqual(service.silenceTimeoutSeconds, 2.2, accuracy: 0.05)
 
-        // 2. Verify clicking Caret Pill HUD while in Voice Recording (.working) state triggers onStopVoiceRecording
+        // 2. Verify ASR spoken error repairs & written AI refinement on real voice log utterances
+        let rawVoice1 = "Tôi đang kiểm tra cái phần năng tự lắng nghe xem nó nhận chưa"
+        let polishedVoice1 = VietnameseTextPolisher.polish(rawVoice1)
+        XCTAssertEqual(polishedVoice1, "Tôi đang kiểm tra cái tính năng tự lắng nghe xem nó nhận chưa")
+        let refinedVoice1 = VietnameseTextPolisher.polishVoiceRefinement(rawVoice1)
+        XCTAssertEqual(refinedVoice1, "Tôi đang kiểm tra tính năng tự lắng nghe xem nó nhận chưa")
+
+        let rawVoice2 = "Hình như là sau khi anh nhận diện cái phần giọng nói sang nhưng mà đúng ra đến có 1 thao tác AI"
+        let polishedVoice2 = VietnameseTextPolisher.polish(rawVoice2)
+        XCTAssertEqual(polishedVoice2, "Hình như là sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI")
+        let refinedVoice2 = VietnameseTextPolisher.polishVoiceRefinement(rawVoice2)
+        XCTAssertEqual(refinedVoice2, "Hình như sau khi nhận diện phần giọng nói sang text nhưng đúng ra cần có một thao tác AI")
+
+        // 3. Verify clicking Caret Pill HUD while in Voice Recording (.working) state triggers onStopVoiceRecording
         let hud = CaretHUDModel.shared
         var didTriggerStopVoice = false
         hud.onStopVoiceRecording = {
@@ -1150,6 +1163,14 @@ final class VietnameseEngineTests: XCTestCase {
         XCTAssertTrue(handled)
         try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertTrue(didTriggerStopVoice)
+
+        // 4. Verify presentVoiceCompleted immediately surfaces ✨ AI Polish suggestion on the Caret Pill HUD
+        hud.presentVoiceCompleted(
+            polishedText: polishedVoice2,
+            rawVoiceText: rawVoice2,
+            caretFrame: CGRect(x: 400, y: 400, width: 460, height: 52)
+        )
+        XCTAssertTrue(hud.suggestions.contains(where: { $0.kind == .aiPolish && $0.text == refinedVoice2 }))
         hud.hideHUD()
     }
 }

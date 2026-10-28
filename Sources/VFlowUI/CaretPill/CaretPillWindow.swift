@@ -552,20 +552,116 @@ public final class CaretHUDModel: ObservableObject {
         resetAutoHideTimer(seconds: 60.0)
     }
 
-    /// Presents the finalized & polished Voice Dictation result on the Caret Pill HUD.
+    /// Presents the finalized & polished Voice Dictation result on the Caret Pill HUD,
+    /// immediately generating AI Polish (`✨`) and contextual next-word suggestions so the user can refine with `Tab-Tab`.
     public func presentVoiceCompleted(
         polishedText: String,
+        rawVoiceText: String? = nil,
         caretFrame: CGRect
     ) {
         ensureHosted()
         aiInferenceTask?.cancel()
-        self.suggestions = []
         self.currentWord = ""
         self.state = .done
         self.text = polishedText
         self.audioLevel = 0.25
+
+        let words = polishedText
+            .components(separatedBy: .whitespacesAndNewlines)
+            .map { $0.trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty }
+
+        var initialItems = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: words,
+            tone: currentTone,
+            fullSentenceText: polishedText
+        )
+
+        let refinedWritten = VietnameseTextPolisher.polishVoiceRefinement(rawVoiceText ?? polishedText, tone: currentTone)
+        if !refinedWritten.isEmpty,
+           refinedWritten.lowercased() != polishedText.lowercased(),
+           !initialItems.contains(where: { $0.kind == .aiPolish }) {
+            let aiItem = SuggestionItem(
+                text: refinedWritten,
+                kind: .aiPolish,
+                replaceCurrentWord: false,
+                severity: .moderate
+            )
+            initialItems.insert(aiItem, at: 0)
+            if initialItems.count > 3 {
+                initialItems = Array(initialItems.prefix(3))
+            }
+        }
+
+        self.suggestions = initialItems
         CaretPillWindow.shared.present(at: caretFrame)
-        resetAutoHideTimer(seconds: 5.0)
+        resetAutoHideTimer(seconds: 14.0)
+
+        guard OnDeviceAIEngine.isFoundationModelAvailable, OnDeviceAIEngine.isNeuralPolishEnabled, words.count >= 2 else { return }
+        let capturedTone = self.currentTone
+        let capturedPolished = polishedText
+        let capturedRaw = rawVoiceText ?? polishedText
+        let capturedFrame = caretFrame
+
+        aiInferenceTask = Task { @MainActor [weak self] in
+            guard let self = self, !Task.isCancelled else { return }
+            guard let aiResult = await OnDeviceAIEngine.shared.inferSentencePolishAndNextWord(
+                rawSentence: capturedRaw,
+                tone: capturedTone
+            ) else { return }
+            guard !Task.isCancelled, self.text == capturedPolished else { return }
+
+            var updated = self.suggestions
+            if !aiResult.polishedSentence.isEmpty,
+               aiResult.polishedSentence.lowercased() != capturedPolished.lowercased() {
+                let aiPolishItem = SuggestionItem(
+                    text: aiResult.polishedSentence,
+                    kind: .aiPolish,
+                    replaceCurrentWord: false,
+                    severity: max(.moderate, aiResult.severity)
+                )
+                if let existingIdx = updated.firstIndex(where: { $0.kind == .aiPolish }) {
+                    updated[existingIdx] = aiPolishItem
+                } else {
+                    updated.insert(aiPolishItem, at: 0)
+                    if updated.count > 3 { updated = Array(updated.prefix(3)) }
+                }
+            }
+
+            let cleanCapturedLower = capturedPolished
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .punctuationCharacters)
+                .lowercased()
+            let cleanNextLower = aiResult.nextWord
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .punctuationCharacters)
+                .lowercased()
+            let isDuplicateSuffix = !cleanNextLower.isEmpty &&
+                (cleanCapturedLower == cleanNextLower || cleanCapturedLower.hasSuffix(" " + cleanNextLower))
+
+            if !cleanNextLower.isEmpty,
+               !isDuplicateSuffix,
+               !updated.contains(where: { $0.text.lowercased() == cleanNextLower }) {
+                let nextItem = SuggestionItem(
+                    text: aiResult.nextWord,
+                    kind: .nextWord,
+                    replaceCurrentWord: false
+                )
+                if updated.count < 3 {
+                    updated.append(nextItem)
+                } else {
+                    updated[updated.count - 1] = nextItem
+                }
+            }
+
+            if updated != self.suggestions {
+                self.suggestions = updated
+                CaretPillWindow.shared.present(at: capturedFrame)
+                self.resetAutoHideTimer(seconds: 15.0)
+            }
+        }
     }
 
     public func hideHUD() {
