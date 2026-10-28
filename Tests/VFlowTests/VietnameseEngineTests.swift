@@ -945,5 +945,50 @@ final class VietnameseEngineTests: XCTestCase {
         XCTAssertFalse(hud.isApplyingSuggestion)
         XCTAssertTrue(hud.isSuggestionAppliedSuccess)
         XCTAssertEqual(hud.state, .done)
+
+        // 6. Verify clicking a single .aiPolish suggestion succeeds even if windowSize.height == 52 or stale chipFrames existed previously
+        hud.chipFrames = [0: CGRect(x: 112, y: 8, width: 45, height: 30)]
+        hud.suggestions = [longItem] // didSet must clear stale chipFrames
+        XCTAssertTrue(hud.chipFrames.isEmpty, "Updating suggestions must clear stale chipFrames")
+
+        let compactClickExp = expectation(description: "Click on single .aiPolish suggestion at height 52 selects it")
+        var selectedCompact: SuggestionItem?
+        hud.onSelectSuggestion = { item in
+            selectedCompact = item
+            compactClickExp.fulfill()
+        }
+        let compactHandled = hud.dispatchHitTest(
+            at: CGPoint(x: 260, y: 24),
+            windowSize: CGSize(width: 520, height: 52)
+        )
+        XCTAssertTrue(compactHandled)
+        await fulfillment(of: [compactClickExp], timeout: 1.0)
+        XCTAssertEqual(selectedCompact?.text, multiParaPolished)
+
+        // 7. Verify Double-Tab (⇥⇥) accepts 2nd Tab after 550ms (> old 380ms timeout) without losing armed state
+        let hook = EventTapHook()
+        var shortcutAcceptedIndex: Int?
+        hook.hasActiveSuggestions = { true }
+        hook.suggestionAcceptShortcut = .doubleTab
+        hook.onSelectSuggestionShortcut = { idx in
+            MainActor.assumeIsolated {
+                shortcutAcceptedIndex = idx
+            }
+            return true
+        }
+        let tab1 = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Tab,
+            flags: [],
+            replaySingleTabOnTimeout: true
+        )
+        XCTAssertTrue(tab1)
+        try? await Task.sleep(nanoseconds: 550_000_000)
+        let tab2 = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Tab,
+            flags: [],
+            replaySingleTabOnTimeout: true
+        )
+        XCTAssertTrue(tab2)
+        XCTAssertEqual(shortcutAcceptedIndex, 0)
     }
 }

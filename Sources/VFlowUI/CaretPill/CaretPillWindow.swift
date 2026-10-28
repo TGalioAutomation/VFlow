@@ -59,9 +59,8 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
         return CaretHUDModel.shared.dispatchHitTest(at: localPoint, windowSize: winFrame.size)
     }
 
-    /// Positions and presents the Caret Pill HUD at the specified frame without activating the application,
-    /// dynamically sizing width to fit all suggestion text without truncation, clamped to the target screen.
-    public func present(at frame: CGRect) {
+    private func applyFittingFrame(for frame: CGRect) {
+        self.contentView?.invalidateIntrinsicContentSize()
         self.contentView?.layoutSubtreeIfNeeded()
         let fitting = self.contentView?.fittingSize ?? frame.size
 
@@ -97,7 +96,17 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
             height: dynamicHeight
         )
         self.setFrame(finalFrame, display: true, animate: false)
+    }
+
+    /// Positions and presents the Caret Pill HUD at the specified frame without activating the application,
+    /// dynamically sizing width and height (including 2-Tier Card layout) to fit all suggestion text without truncation.
+    public func present(at frame: CGRect) {
+        applyFittingFrame(for: frame)
         self.orderFrontRegardless()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.isVisible else { return }
+            self.applyFittingFrame(for: frame)
+        }
     }
 
     /// Smoothly hides the Caret Pill HUD.
@@ -114,7 +123,11 @@ public final class CaretHUDModel: ObservableObject {
     @Published public var state: CaretPillState = .transcript
     @Published public var text: String = ""
     @Published public var currentWord: String = ""
-    @Published public var suggestions: [SuggestionItem] = []
+    @Published public var suggestions: [SuggestionItem] = [] {
+        didSet {
+            chipFrames.removeAll()
+        }
+    }
     @Published public var audioLevel: Float = 0.35
     @Published public var currentTone: PolishTone = .natural
     @Published public var inputMethod: InputMethod = .telex
@@ -168,6 +181,7 @@ public final class CaretHUDModel: ObservableObject {
         isHosted = true
         let root = CaretHUDContainerView(model: self)
         let hostingView = FirstMouseHostingView(rootView: root)
+        hostingView.sizingOptions = [.intrinsicContentSize]
         hostingView.frame = NSRect(x: 0, y: 0, width: 460, height: 52)
         CaretPillWindow.shared.contentView = hostingView
     }
@@ -175,65 +189,66 @@ public final class CaretHUDModel: ObservableObject {
     /// Hit-tests a click inside the Caret Pill HUD in local top-left coordinates and invokes the matching action without stealing focus.
     public func dispatchHitTest(at localPoint: CGPoint, windowSize: CGSize) -> Bool {
         let visible = visibleSuggestions
-        let isTwoTierCard = windowSize.height > 66 && visible.count == 1 && visible.first?.kind == .aiPolish
+        let isTopBarRow = localPoint.y <= 46
 
-        if isTwoTierCard, let first = visible.first {
-            // In 2-Tier Card mode, Tier 1 (top bar: y <= 44) contains VI/EN Mode, Header Badge, Undo, and Tone buttons.
-            // Tier 2 (bottom area: y > 44) is the full-width suggestion card.
-            if localPoint.y <= 44 {
-                if modeButtonFrame.width > 0,
-                   modeButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onToggleInputMethod?()
-                    }
-                    return true
+        // 0. Check top-bar utility controls (VI/EN Mode toggle, Undo, and Cycle Tone)
+        if isTopBarRow {
+            if modeButtonFrame.width > 0,
+               modeButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onToggleInputMethod?()
                 }
-                if undoButtonFrame.width > 0,
-                   undoButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onUndo?()
-                    }
-                    return true
-                }
-                if toneButtonFrame.width > 0,
-                   toneButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onCycleTone?()
-                    }
-                    return true
-                }
-                // Fallback top-bar regions if frames have not yet populated
-                if localPoint.x >= 60 && localPoint.x <= 108 {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onToggleInputMethod?()
-                    }
-                    return true
-                }
-                if localPoint.x >= windowSize.width - 115 && localPoint.x < windowSize.width - 72 {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onUndo?()
-                    }
-                    return true
-                }
-                if localPoint.x >= windowSize.width - 72 {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onCycleTone?()
-                    }
-                    return true
-                }
+                return true
             }
-            // Clicking the Tier 1 header badge or anywhere in Tier 2 selects the full-text suggestion
+            if undoButtonFrame.width > 0,
+               undoButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onUndo?()
+                }
+                return true
+            }
+            if toneButtonFrame.width > 0,
+               toneButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onCycleTone?()
+                }
+                return true
+            }
+            // Fallback top-bar regions if GeometryReader frames have not yet populated
+            if modeButtonFrame.width == 0 && localPoint.x >= 60 && localPoint.x <= 108 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onToggleInputMethod?()
+                }
+                return true
+            }
+            if undoButtonFrame.width == 0 && localPoint.x >= windowSize.width - 115 && localPoint.x < windowSize.width - 72 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onUndo?()
+                }
+                return true
+            }
+            if toneButtonFrame.width == 0 && localPoint.x >= windowSize.width - 72 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.onCycleTone?()
+                }
+                return true
+            }
+        }
+
+        // 1. When there is a single visible suggestion (including 2-Tier Long Card or 1-line full-sentence .aiPolish),
+        // any click outside the top-bar utility controls selects that suggestion immediately.
+        if visible.count == 1, let first = visible.first {
             DispatchQueue.main.async { [weak self] in
                 self?.onSelectSuggestion?(first)
             }
             return true
         }
 
-        // 1. Check recorded suggestion chip frames (1-line horizontal pill mode)
+        // 2. Check recorded suggestion chip frames (multi-chip horizontal pill mode)
         for idx in 0..<visible.count {
             if let rect = chipFrames[idx],
                rect.width > 0,
-               localPoint.x >= rect.minX - 5 && localPoint.x <= rect.maxX + 5 {
+               localPoint.x >= rect.minX - 6 && localPoint.x <= rect.maxX + 6 {
                 let chosen = visible[idx]
                 DispatchQueue.main.async { [weak self] in
                     self?.onSelectSuggestion?(chosen)
@@ -242,41 +257,29 @@ public final class CaretHUDModel: ObservableObject {
             }
         }
 
-        // 2. Check recorded VI/EN Mode Toggle button frame
-        if modeButtonFrame.width > 0,
-           localPoint.x >= modeButtonFrame.minX - 5 && localPoint.x <= modeButtonFrame.maxX + 5 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onToggleInputMethod?()
+        // 3. Nearest-chip & proportional horizontal fallback so clicking anywhere in the suggestion zone always selects a chip
+        if !visible.isEmpty {
+            var bestIdx: Int?
+            var bestDist = CGFloat.greatestFiniteMagnitude
+            for idx in 0..<visible.count {
+                if let rect = chipFrames[idx], rect.width > 0 {
+                    let dist = abs(localPoint.x - rect.midX)
+                    if dist < bestDist {
+                        bestDist = dist
+                        bestIdx = idx
+                    }
+                }
             }
-            return true
-        }
+            if let matched = bestIdx {
+                let chosen = visible[matched]
+                DispatchQueue.main.async { [weak self] in
+                    self?.onSelectSuggestion?(chosen)
+                }
+                return true
+            }
 
-        // 3. Check recorded Undo & Cycle Tone button frames
-        if undoButtonFrame.width > 0,
-           localPoint.x >= undoButtonFrame.minX - 4 && localPoint.x <= undoButtonFrame.maxX + 4 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onUndo?()
-            }
-            return true
-        }
-        if toneButtonFrame.width > 0,
-           localPoint.x >= toneButtonFrame.minX - 4 && localPoint.x <= toneButtonFrame.maxX + 4 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onCycleTone?()
-            }
-            return true
-        }
-
-        // 4. Proportional horizontal fallback if GeometryReader frames have not yet populated
-        if localPoint.x >= 60 && localPoint.x <= 108 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onToggleInputMethod?()
-            }
-            return true
-        }
-        let chipRegionStart: CGFloat = 109
-        let chipRegionEnd: CGFloat = max(chipRegionStart + 40, windowSize.width - 115)
-        if !visible.isEmpty && localPoint.x > chipRegionStart && localPoint.x < chipRegionEnd {
+            let chipRegionStart: CGFloat = 108
+            let chipRegionEnd: CGFloat = max(chipRegionStart + 40, windowSize.width - 115)
             let weights = visible.map { CGFloat(max(6, $0.text.count + 5)) }
             let totalWeight = max(1, weights.reduce(0, +))
             let ratio = max(0, min(0.999, (localPoint.x - chipRegionStart) / (chipRegionEnd - chipRegionStart)))
@@ -292,18 +295,6 @@ public final class CaretHUDModel: ObservableObject {
             let chosen = visible[matchedIndex]
             DispatchQueue.main.async { [weak self] in
                 self?.onSelectSuggestion?(chosen)
-            }
-            return true
-        }
-        if localPoint.x >= windowSize.width - 115 && localPoint.x < windowSize.width - 72 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onUndo?()
-            }
-            return true
-        }
-        if localPoint.x >= windowSize.width - 72 {
-            DispatchQueue.main.async { [weak self] in
-                self?.onCycleTone?()
             }
             return true
         }

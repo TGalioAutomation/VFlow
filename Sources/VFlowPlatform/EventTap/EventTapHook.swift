@@ -49,6 +49,8 @@ public final class EventTapHook: @unchecked Sendable {
     private var swallowingHUDMouseClick: Bool = false
     private var lastTabPressTime: Date = .distantPast
     private var pendingSingleTabWorkItem: DispatchWorkItem?
+    private var isCursorKnownAtEnd: Bool = true
+    private var lastBoundaryWasSpace: Bool = false
     private let lock = NSLock()
     private let logPath = "/tmp/vflow_keylog.log"
 
@@ -115,6 +117,7 @@ public final class EventTapHook: @unchecked Sendable {
         if char == " " {
             TypingBuffer.shared.appendWord(currentWord)
             clearMouseReset()
+            lock.withLock { lastBoundaryWasSpace = true }
         } else if punctuationSet.contains(char) {
             if !currentWord.isEmpty {
                 TypingBuffer.shared.appendWord(currentWord + String(char))
@@ -122,6 +125,9 @@ public final class EventTapHook: @unchecked Sendable {
                 TypingBuffer.shared.appendPunctuation(char)
             }
             clearMouseReset()
+            lock.withLock { lastBoundaryWasSpace = false }
+        } else {
+            lock.withLock { lastBoundaryWasSpace = false }
         }
     }
 
@@ -136,9 +142,8 @@ public final class EventTapHook: @unchecked Sendable {
         pendingItem?.cancel()
         if wasArmed {
             onDoubleTabArmedChanged?(false)
-            if flushSingleTab && pendingItem != nil {
-                postSyntheticKey(KeyCodeMap.kVK_Tab)
-            }
+            // Never emit a focus-stealing synthetic Tab when disarming an active Suggestion HUD Double-Tab
+            _ = flushSingleTab
         }
     }
 
@@ -167,9 +172,9 @@ public final class EventTapHook: @unchecked Sendable {
             }
         }
 
-        // If any non-Tab key is pressed while a first Tab is armed, flush/cancel the pending single Tab
+        // If any non-Tab key is pressed while a first Tab is armed, disarm the pending Double-Tab
         if keycode != KeyCodeMap.kVK_Tab {
-            cancelPendingDoubleTab(flushSingleTab: replaySingleTabOnTimeout)
+            cancelPendingDoubleTab(flushSingleTab: false)
         }
 
         guard canTriggerSuggestionShortcut() else {
@@ -187,8 +192,8 @@ public final class EventTapHook: @unchecked Sendable {
             }
             let now = Date()
             let elapsed = lock.withLock { now.timeIntervalSince(lastTabPressTime) }
-            if elapsed <= 0.50 {
-                // 2nd Tab press within 500ms -> Accept Suggestion #1!
+            if elapsed <= 0.90 {
+                // 2nd Tab press within 900ms -> Accept Suggestion #1!
                 cancelPendingDoubleTab(flushSingleTab: false)
                 if onSelectSuggestionShortcut?(0) == true {
                     logDiagnostic("DOUBLE_TAB_ACCEPTED elapsedMs=\(Int(elapsed * 1000))")
@@ -196,7 +201,7 @@ public final class EventTapHook: @unchecked Sendable {
                 }
                 return false
             } else {
-                // 1st Tab press while HUD has active suggestions -> Arm Double-Tab & hold for 380ms
+                // 1st Tab press while HUD has active suggestions -> Arm Double-Tab & hold for 900ms without stealing focus
                 lock.withLock {
                     pendingSingleTabWorkItem?.cancel()
                     lastTabPressTime = now
@@ -210,14 +215,11 @@ public final class EventTapHook: @unchecked Sendable {
                             self.lastTabPressTime = .distantPast
                         }
                         self.onDoubleTabArmedChanged?(false)
-                        self.engine.reset()
-                        self.clearMouseReset()
-                        self.postSyntheticKey(KeyCodeMap.kVK_Tab)
                     }
                     lock.withLock {
                         pendingSingleTabWorkItem = work
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.38, execute: work)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.90, execute: work)
                 }
                 return true
             }
@@ -446,6 +448,7 @@ public final class EventTapHook: @unchecked Sendable {
             if !engine.formattedWord.isEmpty {
                 recordMouseReset(word: engine.formattedWord)
             }
+            lock.withLock { isCursorKnownAtEnd = false }
             engine.reset()
             if isWithinTypingActivityWindow(seconds: 3600.0) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
@@ -542,6 +545,11 @@ public final class EventTapHook: @unchecked Sendable {
         if keycode == 0x7B || keycode == 0x7C || keycode == 0x7D || keycode == 0x7E ||
            keycode == 0x73 || keycode == 0x77 || keycode == 0x74 || keycode == 0x79 ||
            keycode == 0x75 {
+            if keycode == 0x7B || keycode == 0x7E || keycode == 0x73 || keycode == 0x74 {
+                lock.withLock { isCursorKnownAtEnd = false }
+            } else if keycode == 0x77 || keycode == 0x79 {
+                lock.withLock { isCursorKnownAtEnd = true }
+            }
             engine.reset()
             clearMouseReset()
             setLastPhysicalKey(keycode)
@@ -653,6 +661,48 @@ public final class EventTapHook: @unchecked Sendable {
         return Unmanaged.passUnretained(event)
     }
 
+    /// Reads the focused text context and resolves cursorLocation when Chromium/Electron contenteditable
+    /// elements report cursorLocation == 0 or a child-node offset while the user is typing at the end.
+    private func readResolvedTextContext() -> FocusedTextContext? {
+        guard let rawCtx = AccessibilityBridge.shared.readFocusedTextContext() else {
+            return nil
+        }
+        let nsFull = rawCtx.fullText as NSString
+        guard nsFull.length > 0 else {
+            lock.withLock { isCursorKnownAtEnd = true }
+            return rawCtx
+        }
+        if rawCtx.cursorLocation >= nsFull.length {
+            lock.withLock { isCursorKnownAtEnd = true }
+            return rawCtx
+        }
+
+        let trimmedFull = rawCtx.fullText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let currentFormatted = engine.formattedWord.lowercased()
+        let lastBufferedWord = (TypingBuffer.shared.recentWords().last ?? "")
+            .trimmingCharacters(in: .punctuationCharacters)
+            .lowercased()
+
+        let isBogusZeroCursor = (rawCtx.cursorLocation == 0) &&
+            (!currentFormatted.isEmpty || !lastBufferedWord.isEmpty || lock.withLock { isCursorKnownAtEnd })
+
+        let matchesEndByCurrentWord = !currentFormatted.isEmpty &&
+            trimmedFull.hasSuffix(currentFormatted) &&
+            rawCtx.wordPrefix.lowercased() != currentFormatted
+
+        let matchesEndByBufferedWord = currentFormatted.isEmpty &&
+            !lastBufferedWord.isEmpty &&
+            trimmedFull.hasSuffix(lastBufferedWord) &&
+            rawCtx.wordBeforeCursor.lowercased() != lastBufferedWord &&
+            rawCtx.wordAtCursor.lowercased() != lastBufferedWord
+
+        if isBogusZeroCursor || matchesEndByCurrentWord || matchesEndByBufferedWord || lock.withLock({ isCursorKnownAtEnd }) {
+            lock.withLock { isCursorKnownAtEnd = true }
+            return AccessibilityBridge.extractContext(fullText: rawCtx.fullText, cursorLocation: nsFull.length)
+        }
+        return rawCtx
+    }
+
     /// Broadcasts the current composing word and sentence context to the Caret Pill HUD.
     public func notifyTypingState() {
         if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
@@ -668,7 +718,7 @@ public final class EventTapHook: @unchecked Sendable {
         var fullSentenceText = ""
         var wordAfterCursor = ""
 
-        if let ctx = AccessibilityBridge.shared.readFocusedTextContext() {
+        if let ctx = readResolvedTextContext() {
             // Preserve the ENTIRE input box text (including multiple sentences separated by '.' and multi-line '\n' paragraphs)
             fullSentenceText = ctx.fullText.trimmingCharacters(in: .whitespacesAndNewlines)
             wordAfterCursor = ctx.wordAfterCursor
@@ -702,7 +752,7 @@ public final class EventTapHook: @unchecked Sendable {
 
     /// Applies a selected suggestion item directly into the active text field.
     public func applySuggestion(_ item: SuggestionItem) {
-        let ctx = AccessibilityBridge.shared.readFocusedTextContext()
+        let ctx = readResolvedTextContext()
         let liveText = ctx?.fullText
 
         let activeWord: String = {
@@ -727,8 +777,9 @@ public final class EventTapHook: @unchecked Sendable {
             return ""
         }()
 
-        // Case 1: Full input box / multi-sentence polish (✨) — replaces via smart tail delta or instant AX write
+        // Case 1: Full input box / multi-sentence polish (✨) — always replaces via synthetic keystrokes (100% compatible with Electron, Chrome, AppKit, SwiftUI)
         if item.kind == .aiPolish {
+            let targetInserted = item.text + (item.text.hasSuffix(" ") ? "" : " ")
             if let ctx = ctx, !ctx.fullText.isEmpty {
                 TypingBuffer.shared.recordForUndo(ctx.fullText)
                 let nsFull = ctx.fullText as NSString
@@ -737,50 +788,55 @@ public final class EventTapHook: @unchecked Sendable {
                 let rightSub = nsFull.substring(from: safeCursor)
                 let rightTrimmed = rightSub.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                let targetInserted = item.text + (item.text.hasSuffix(" ") ? "" : " ")
-
                 if rightTrimmed.isEmpty {
                     let rightTrailingSpacesCount = rightSub.count
                     if rightTrailingSpacesCount > 0 {
                         postForwardDeletes(rightTrailingSpacesCount)
                     }
                     let delta = VietnameseInputEngine.minimalDelta(from: leftSub, to: targetInserted)
-                    if delta.backspaces > 80 && AccessibilityBridge.shared.writeFocusedFullText(targetInserted) {
-                        // Instant full-box replacement succeeded via Accessibility
-                    } else {
-                        if delta.backspaces > 0 {
-                            postBackspaces(delta.backspaces)
-                        }
-                        if !delta.replacement.isEmpty {
-                            postUnicodeString(delta.replacement)
-                        }
-                    }
-                } else {
-                    if !AccessibilityBridge.shared.writeFocusedFullText(targetInserted) {
-                        if leftSub.count > 0 {
-                            postBackspaces(leftSub.count)
-                        }
-                        if rightSub.count > 0 {
-                            postForwardDeletes(rightSub.count)
-                        }
-                        postUnicodeString(targetInserted)
-                    }
-                }
-            } else {
-                let currentSentence = TypingBuffer.shared.currentSentence()
-                let fullDisplayed = activeWord.isEmpty ? currentSentence : (currentSentence.isEmpty ? activeWord : "\(currentSentence) \(activeWord)")
-                if !fullDisplayed.isEmpty {
-                    TypingBuffer.shared.recordForUndo(fullDisplayed)
-                    let displayedWithTrailing = fullDisplayed + (activeWord.isEmpty ? " " : "")
-                    let delta = VietnameseInputEngine.minimalDelta(from: displayedWithTrailing, to: item.text + " ")
                     if delta.backspaces > 0 {
                         postBackspaces(delta.backspaces)
                     }
                     if !delta.replacement.isEmpty {
                         postUnicodeString(delta.replacement)
                     }
+                    logDiagnostic("APPLY_AI_POLISH mode=delta bs=\(delta.backspaces) repLen=\(delta.replacement.count) fullLen=\(nsFull.length)")
                 } else {
-                    postUnicodeString(item.text + " ")
+                    if leftSub.count > 0 {
+                        postBackspaces(leftSub.count)
+                    }
+                    if rightSub.count > 0 {
+                        postForwardDeletes(rightSub.count)
+                    }
+                    postUnicodeString(targetInserted)
+                    logDiagnostic("APPLY_AI_POLISH mode=midCursor leftBS=\(leftSub.count) rightDel=\(rightSub.count) repLen=\(targetInserted.count)")
+                }
+            } else {
+                let currentSentence = TypingBuffer.shared.currentSentence()
+                let fullDisplayed: String = {
+                    if activeWord.isEmpty {
+                        return currentSentence
+                    }
+                    if currentSentence.lowercased().hasSuffix(activeWord.lowercased()) {
+                        return currentSentence
+                    }
+                    return currentSentence.isEmpty ? activeWord : "\(currentSentence) \(activeWord)"
+                }()
+                if !fullDisplayed.isEmpty {
+                    TypingBuffer.shared.recordForUndo(fullDisplayed)
+                    let hasTrailingSpace = activeWord.isEmpty && lock.withLock { lastBoundaryWasSpace }
+                    let displayedWithTrailing = fullDisplayed + (hasTrailingSpace ? " " : "")
+                    let delta = VietnameseInputEngine.minimalDelta(from: displayedWithTrailing, to: targetInserted)
+                    if delta.backspaces > 0 {
+                        postBackspaces(delta.backspaces)
+                    }
+                    if !delta.replacement.isEmpty {
+                        postUnicodeString(delta.replacement)
+                    }
+                    logDiagnostic("APPLY_AI_POLISH mode=bufferFallback bs=\(delta.backspaces) repLen=\(delta.replacement.count)")
+                } else {
+                    postUnicodeString(targetInserted)
+                    logDiagnostic("APPLY_AI_POLISH mode=directInsert repLen=\(targetInserted.count)")
                 }
             }
             clearMouseReset()
@@ -788,6 +844,10 @@ public final class EventTapHook: @unchecked Sendable {
             TypingBuffer.shared.clear()
             for tok in item.text.components(separatedBy: .whitespaces) where !tok.isEmpty {
                 TypingBuffer.shared.appendWord(tok)
+            }
+            lock.withLock {
+                lastBoundaryWasSpace = true
+                isCursorKnownAtEnd = true
             }
             notifyTypingState()
             return
@@ -815,17 +875,29 @@ public final class EventTapHook: @unchecked Sendable {
             let bsCount = item.targetWordToReplace.count + trailingWhitespaceCount
             postBackspaces(bsCount)
             postUnicodeString(item.text + " ")
+            logDiagnostic("APPLY_LAST_WORD target='\(item.targetWordToReplace)' rep='\(item.text)' bs=\(bsCount)")
             clearMouseReset()
             engine.reset()
             TypingBuffer.shared.replaceLastWord(with: item.text)
+            lock.withLock { lastBoundaryWasSpace = true }
             notifyTypingState()
             return
         }
 
         // Case 3: Replace the word at the cursor (e.g. "duoc|" -> "được " or mid-word "du|oc" -> "được")
         if item.replaceCurrentWord && !activeWord.isEmpty {
-            let leftCount = (ctx != nil && (!ctx!.wordPrefix.isEmpty || !ctx!.wordSuffix.isEmpty)) ? ctx!.wordPrefix.count : activeWord.count
-            let rightCount = ctx?.wordSuffix.count ?? 0
+            let ctxMatchesActiveWord: Bool = {
+                guard let ctx = ctx else { return false }
+                if ctx.wordAtCursor.lowercased() == activeWord.lowercased() && !ctx.wordPrefix.isEmpty {
+                    return true
+                }
+                if !ctx.wordPrefix.isEmpty && activeWord.lowercased().hasPrefix(ctx.wordPrefix.lowercased()) {
+                    return true
+                }
+                return false
+            }()
+            let leftCount = ctxMatchesActiveWord ? (ctx?.wordPrefix.count ?? activeWord.count) : activeWord.count
+            let rightCount = ctxMatchesActiveWord ? (ctx?.wordSuffix.count ?? 0) : 0
 
             if leftCount > 0 {
                 postBackspaces(leftCount)
@@ -835,7 +907,7 @@ public final class EventTapHook: @unchecked Sendable {
             }
 
             let hasSpaceAfterCursor: Bool = {
-                if let ctx = ctx {
+                if ctxMatchesActiveWord, let ctx = ctx {
                     let nsFull = ctx.fullText as NSString
                     let safeCursor = max(0, min(nsFull.length, ctx.cursorLocation))
                     let suffixLength = (ctx.wordSuffix as NSString).length
@@ -855,11 +927,13 @@ public final class EventTapHook: @unchecked Sendable {
                 return false
             }()
             postUnicodeString(item.text + (hasSpaceAfterCursor ? "" : " "))
+            logDiagnostic("APPLY_CURRENT_WORD active='\(activeWord)' rep='\(item.text)' leftBS=\(leftCount) rightDel=\(rightCount)")
             clearMouseReset()
             engine.reset()
             for tok in item.text.components(separatedBy: .whitespaces) where !tok.isEmpty {
                 TypingBuffer.shared.appendWord(tok)
             }
+            lock.withLock { lastBoundaryWasSpace = !hasSpaceAfterCursor }
             notifyTypingState()
             return
         }
