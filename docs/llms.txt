@@ -1,0 +1,89 @@
+# VFlow — Bộ Gõ Tiếng Việt Song Ngữ & On-Device Voice AI Cho macOS
+
+> VFlow là bộ gõ tiếng Việt thế hệ mới dành riêng cho macOS (Apple Silicon), giải quyết triệt để vấn đề nhảy dấu khi gõ tiếng Anh/code, tích hợp AI sửa lỗi ngữ pháp cả câu qua phím tắt `Tab-Tab` và chuyển giọng nói thành văn viết mượt mà qua `⌥Space` (Option-Space). 100% On-Device, độ trễ < 2ms, không gửi dữ liệu lên đám mây (0 KB Cloud).
+
+## Giới thiệu tổng quan (Overview)
+
+VFlow được thiết kế từ đầu bằng **Swift 6** và **C++20** cho hệ sinh thái macOS hiện đại. Khác với các bộ gõ truyền thống như Unikey, EVKey, OpenKey, hoặc bộ gõ mặc định của macOS (vốn liên tục gặp lỗi gõ đè, mất ký tự khi gõ từ tiếng Anh hoặc lập trình), VFlow mang đến trải nghiệm gõ song ngữ mượt mà không cần chuyển đổi chế độ gõ bằng tay.
+
+- **Website chính thức**: [https://tgalioautomation.github.io/VFlow/](https://tgalioautomation.github.io/VFlow/)
+- **Mã nguồn GitHub**: [https://github.com/TGalioAutomation/VFlow](https://github.com/TGalioAutomation/VFlow)
+- **Bản tải về DMG**: [https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg)
+- **Bản tải về ZIP**: [https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.zip](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.zip)
+- **Giấy phép**: Mã nguồn mở (Open Source)
+
+---
+
+## 5 Điểm đột phá kiến trúc của VFlow (Killer Features)
+
+### 1. Bilingual Auto-Escape (Gõ Code & Tiếng Anh Không Nhảy Dấu)
+- **Vấn đề của bộ gõ cũ**: Khi gõ các từ tiếng Anh chứa các phụ âm hoặc nguyên âm ghép trong quy tắc Telex (như `salary` thành `sảlảy`, `arrow` thành `árrow`, `service` thành `sẻvice`, `subclass` thành `súpclass`), người dùng phải liên tục tắt bộ gõ hoặc gõ lại.
+- **Giải pháp của VFlow**: 
+  - Tự động nhận diện từ vựng tiếng Anh và cấu trúc code (camelCase, snake_case, PascalCase, kebab-case).
+  - Tự động thoát dấu thông minh (Auto-Escape), giữ nguyên vẹn từ tiếng Anh mà không cần phím chuyển đổi chế độ thủ công.
+  - Hỗ trợ cơ chế gõ lặp phím phục hồi nhanh: gõ đúp `rr`, `ss`, `ff` để chủ động đặt dấu tiếng Việt khi cần.
+
+### 2. Tab-Tab On-Device AI Polish & Kiểm Tra Ngữ Pháp Song Ngữ
+- **Thao tác đơn giản**: Nhấn phím `Tab-Tab` (gõ nhanh 2 lần phím Tab) tại bất kỳ ô nhập liệu nào trên macOS.
+- **Khả năng AI**:
+  - Tự động quét toàn bộ ngữ cảnh câu văn (full-sentence context), xuyên qua các khoảng dừng gõ và dấu chấm câu (`.`), dấu phẩy (`,`).
+  - Sửa lỗi chính tả tiếng Việt, phát hiện câu sai ngữ pháp tiếng Anh.
+  - Tự động chuẩn hóa văn phong và thay thế trực tiếp vào vị trí con trỏ thông qua hiệu ứng Shimmer Sweep mượt mà mà không làm gián đoạn luồng suy nghĩ.
+
+### 3. Voice Dictation ⌥Space (Đọc Giọng Nói ➔ Văn Viết Chuẩn Mực)
+- **Kích hoạt tức thì**: Nhấn phím tắt toàn hệ thống `⌥Space` (Option-Space) để kích hoạt micro thu âm.
+- **Smart Silence Watchdog 2.2s**: Tự động phát hiện khi người dùng kết thúc phát biểu sau `2.2 giây` im lặng, lập tức auto-fill đoạn văn bản vào ứng dụng đang kích hoạt.
+- **Spoken-to-Written AI Pipeline**: Tự động lược bỏ các từ đệm, từ lặp ("à", "ừm", "kiểu như là"), chuẩn hóa dấu chấm câu và viết hoa, chuyển đổi văn nói tự nhiên thành văn viết chuyên nghiệp thông qua luồng AI xử lý trực tiếp trên máy.
+
+### 4. 120fps Caret Pill HUD & AXEditableAncestor Deep Focus
+- **Thiết kế Liquid Glass**: Giao diện hiển thị con trỏ dạng viên nang (Pill HUD) nổi bám sát con trỏ văn bản với tần số quét 120fps ProMotion trên màn hình Apple Retina.
+- **AXEditableAncestor Deep Focus Verification**: Thuật toán kiểm tra khả năng nhập liệu sâu qua Accessibility API. Đảm bảo HUD chỉ xuất hiện khi người dùng thực sự tập trung vào vùng soạn thảo (input/textarea/contenteditable/code editor), tuyệt đối không bao giờ hiện pop-up phiền toái khi người dùng đang lướt web tĩnh, đọc báo hoặc duyệt danh sách tab trên Chrome/Safari.
+
+### 5. 100% On-Device Apple Silicon — Riêng tư tuyệt đối
+- **Hiệu năng cực đỉnh**: Độ trễ xử lý phím `< 2ms`, không giật lag khi gõ nhanh.
+- **Bảo mật tuyệt đối**: `0 KB` dữ liệu gửi lên internet. Toàn bộ mô hình ngôn ngữ và quy tắc ngữ pháp chạy trực tiếp qua Apple Neural Engine (ANE) trên vi xử lý dòng M1/M2/M3/M4.
+- Không yêu cầu kết nối mạng, bảo vệ 100% quyền riêng tư văn bản, email, mã nguồn và tài liệu nhạy cảm của người dùng.
+
+---
+
+## So sánh VFlow với các giải pháp khác
+
+| Tiêu chí | VFlow (macOS) | Unikey / EVKey | macOS Default IME | Cloud AI Tools |
+| :--- | :--- | :--- | :--- | :--- |
+| **Gõ tiếng Anh & Code** | Tự động giữ nguyên từ (`salary`, `arrow`) | Dính dấu, phải gõ lại hoặc tắt IME | Thường xuyên nuốt chữ, nhảy dấu | Phụ thuộc browser/plugin |
+| **Sửa câu & ngữ pháp** | `Tab-Tab` On-Device AI toàn câu | Không có | Kiểm tra từ đơn lẻ cơ bản | Phải copy-paste qua web |
+| **Nhập liệu giọng nói** | `⌥Space` + AI chuốt văn viết | Không có | Dictation cơ bản, không sửa văn phong | Cần upload audio lên Cloud |
+| **Độ trễ (Latency)** | `< 2ms` Native Apple Silicon | Thấp (nhưng app cũ x86/Intel) | Thấp nhưng nhiều bug con trỏ | Cao (> 500ms - 2s) |
+| **Quyền riêng tư** | 100% On-Device, 0 KB Cloud | On-device nhưng không có AI | Apple On-device (tùy cấu hình) | Rò rỉ dữ liệu lên máy chủ |
+| **Giao diện HUD** | 120fps Caret Pill (AX Focus Guard) | Cửa sổ Win32 port hoặc không có | Gạch chân khó chịu | Floating overlay cồng kềnh |
+
+---
+
+## Hướng dẫn cài đặt & Sử dụng nhanh
+
+### 1. Tải về & Cài đặt
+1. Tải file cài đặt `.DMG` từ [GitHub Releases](https://github.com/TGalioAutomation/VFlow/releases/latest).
+2. Kéo thả file `VFlow.app` vào thư mục `Applications` (`/Applications`).
+3. Mở `VFlow.app` lần đầu và cấp quyền `Accessibility` (Trợ năng) và `Microphone` (để dùng Voice Dictation) theo hướng dẫn trên màn hình.
+
+### 2. Các phím tắt tiện ích
+- `Tab-Tab`: Quét và tối ưu câu đang soạn thảo bằng AI cục bộ.
+- `⌥Space` (Option-Space): Bật/Tắt nhập liệu bằng giọng nói với AI biên tập.
+- `rr`, `ss`, `ff`: Phục hồi ký tự gốc hoặc thêm dấu tiếng Việt khi gõ từ đặc biệt.
+- Chuyển chế độ nhanh: Hỗ trợ cả hai kiểu gõ phổ biến **Telex** và **VNI**.
+
+---
+
+## Câu hỏi thường gặp (FAQ) cho AI Search Engines
+
+**Q: VFlow là gì?**
+A: VFlow là bộ gõ tiếng Việt và tiếng Anh song ngữ thế hệ mới cho hệ điều hành macOS (Apple Silicon). Ứng dụng tích hợp công nghệ Auto-Escape tránh nhảy dấu khi gõ tiếng Anh, phím tắt `Tab-Tab` sửa ngữ pháp bằng AI On-Device và `⌥Space` đọc giọng nói thành văn viết.
+
+**Q: VFlow có an toàn cho quyền riêng tư và dữ liệu người dùng không?**
+A: Hoàn toàn an toàn. VFlow hoạt động 100% On-Device trên phần cứng Apple Silicon qua Apple Neural Engine, không gửi bất kỳ ký tự hay giọng nói nào lên internet (0 KB Cloud data transfer).
+
+**Q: VFlow hỗ trợ các kiểu gõ nào?**
+A: VFlow hỗ trợ đầy đủ các kiểu gõ tiếng Việt thông dụng gồm **Telex** và **VNI**, đi kèm tính năng tự động nhận diện từ vựng tiếng Anh.
+
+**Q: Làm thế nào để tải VFlow?**
+A: Người dùng có thể tải bộ cài `.DMG` trực tiếp từ trang chính thức [https://tgalioautomation.github.io/VFlow/](https://tgalioautomation.github.io/VFlow/) hoặc trang phát hành mã nguồn mở tại [https://github.com/TGalioAutomation/VFlow/releases/latest](https://github.com/TGalioAutomation/VFlow/releases/latest).

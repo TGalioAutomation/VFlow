@@ -68,6 +68,23 @@ a {
   text-decoration: none;
 }
 
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--accent-cyan);
+  color: #030712;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  z-index: 9999;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
 /* ==============================================================================
    Navigation Bar
    ============================================================================== */
@@ -714,6 +731,14 @@ kbd {
 /* ==============================================================================
    3 Visual Before / After Killer Cards
    ============================================================================== */
+.pain-section,
+.specs-section,
+.install-section,
+.faq-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 320px;
+}
+
 .pain-section {
   padding: 36px 20px 56px;
 }
@@ -1021,6 +1046,106 @@ kbd {
   color: var(--text-muted);
   overflow-x: auto;
   line-height: 1.5;
+}
+
+/* ==============================================================================
+   Compact Collapsed FAQ Accordion (SEO Rich Snippets)
+   ============================================================================== */
+.faq-section {
+  padding: 0 20px 56px;
+}
+
+.faq-container {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.faq-accordion-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faq-item {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.faq-item[open] {
+  border-color: var(--border-highlight);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.faq-summary {
+  display: flex;
+  align-items: safe center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 18px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-summary code {
+  font-family: var(--font-mono);
+  color: #7dd3fc;
+}
+
+.faq-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.faq-icon::before,
+.faq-icon::after {
+  content: "";
+  position: absolute;
+  background-color: var(--accent-cyan);
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.faq-icon::before {
+  top: 5px;
+  left: 0;
+  width: 12px;
+  height: 2px;
+}
+
+.faq-icon::after {
+  top: 0;
+  left: 5px;
+  width: 2px;
+  height: 12px;
+}
+
+.faq-item[open] .faq-icon::after {
+  opacity: 0;
+  transform: rotate(90deg);
+}
+
+.faq-content {
+  padding: 0 18px 14px;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.faq-content code {
+  font-family: var(--font-mono);
+  color: #7dd3fc;
 }
 
 /* ==============================================================================

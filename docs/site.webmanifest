@@ -1,0 +1,23 @@
+{
+  "name": "VFlow — Bộ Gõ Song Ngữ Anh-Việt & Voice AI Cho macOS",
+  "short_name": "VFlow",
+  "description": "Bộ gõ tiếng Việt & tiếng Anh thế hệ mới cho macOS: Gõ không nhảy dấu, Tab-Tab sửa ngữ pháp cả câu, Voice AI ⌥Space 100% On-Device Apple Silicon.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#06090f",
+  "background_color": "#06090f",
+  "categories": [
+    "utilities",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "assets/app_icon_nobg.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
