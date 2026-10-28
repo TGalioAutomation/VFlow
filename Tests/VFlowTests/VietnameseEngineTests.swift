@@ -1126,4 +1126,30 @@ final class VietnameseEngineTests: XCTestCase {
             engine.reset()
         }
     }
+
+    @MainActor
+    func testVoiceDictationAutoStopOnSilenceAndCaretHUDClick() async {
+        // 1. Verify VoiceDictationService autoStopOnSilence is enabled by default with ~1.25s silence timeout
+        let service = VoiceDictationService.shared
+        XCTAssertTrue(service.autoStopOnSilence)
+        XCTAssertEqual(service.silenceTimeoutSeconds, 1.25, accuracy: 0.05)
+
+        // 2. Verify clicking Caret Pill HUD while in Voice Recording (.working) state triggers onStopVoiceRecording
+        let hud = CaretHUDModel.shared
+        var didTriggerStopVoice = false
+        hud.onStopVoiceRecording = {
+            didTriggerStopVoice = true
+        }
+        hud.presentVoiceRecording(
+            displayText: "🎙 Đang nghe (VI)... Tôi đang xác nhận xem",
+            audioLevel: 0.65,
+            caretFrame: CGRect(x: 400, y: 400, width: 460, height: 52)
+        )
+        XCTAssertEqual(hud.state, .working)
+        let handled = hud.dispatchHitTest(at: CGPoint(x: 220, y: 24), windowSize: CGSize(width: 460, height: 52))
+        XCTAssertTrue(handled)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertTrue(didTriggerStopVoice)
+        hud.hideHUD()
+    }
 }

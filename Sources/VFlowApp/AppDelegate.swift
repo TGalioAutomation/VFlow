@@ -12,6 +12,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tapMonitorTimer: Timer?
     private var backgroundActivity: NSObjectProtocol?
     private var lastCaretRect: CGRect = CGRect(x: 600, y: 800, width: 200, height: 36)
+    private var lastExternalActiveApp: NSRunningApplication?
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -71,13 +72,23 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+           frontApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            lastExternalActiveApp = frontApp
+        }
+
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             Task { @MainActor in
-                if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                if let app = NSWorkspace.shared.frontmostApplication,
+                   app.bundleIdentifier != Bundle.main.bundleIdentifier {
+                    self?.lastExternalActiveApp = app
+                }
+                if !VoiceDictationService.shared.isRecording &&
+                   !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
                     CaretHUDModel.shared.hideHUD()
                 }
             }
@@ -165,6 +176,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         CaretHUDModel.shared.onUndo = {
             EventTapHook.shared.postSyntheticKey(KeyCodeMap.kVK_ANSI_Z, flags: .maskCommand)
+        }
+        CaretHUDModel.shared.onStopVoiceRecording = {
+            VoiceDictationService.shared.stopRecording()
         }
 
         EventTapHook.shared.onHUDMouseDown = { screenPoint in
@@ -280,24 +294,46 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 VFlowControlCenterStore.shared.updateVoiceFinal(raw: trimmedRaw, polished: polished)
 
                 let frame = self.currentCaretPillFrame()
-                // Inject directly into active text field if the user is not inside the VFlow Settings window
                 let isSettingsKeyWindow = (BentoSettingsWindowController.shared.window?.isKeyWindow == true)
-                var insertedCount = 0
-                if !isSettingsKeyWindow {
-                    insertedCount = EventTapHook.shared.injectVoiceTranscript(polished)
-                }
+                let isEditableFocused = AccessibilityBridge.shared.isFocusedElementEditableTextInput()
 
-                let undoLen = insertedCount
-                CaretHUDModel.shared.onUndo = {
-                    if undoLen > 0 {
-                        EventTapHook.shared.postBackspaces(undoLen)
+                // Inject directly into any focused editable text field (including external apps OR VFlow Sandbox).
+                // If Settings button was clicked and no text field inside Settings is focused, restore focus to last external app and inject.
+                if isEditableFocused || !isSettingsKeyWindow {
+                    let insertedCount = EventTapHook.shared.injectVoiceTranscript(polished)
+                    let undoLen = insertedCount
+                    CaretHUDModel.shared.onUndo = {
+                        if undoLen > 0 {
+                            EventTapHook.shared.postBackspaces(undoLen)
+                        }
+                        CaretHUDModel.shared.hideHUD()
                     }
-                    CaretHUDModel.shared.hideHUD()
+                    CaretHUDModel.shared.presentVoiceCompleted(
+                        polishedText: polished,
+                        caretFrame: frame
+                    )
+                } else if let extApp = self.lastExternalActiveApp, !extApp.isTerminated {
+                    extApp.activate()
+                    try? await Task.sleep(nanoseconds: 90_000_000)
+                    let insertedCount = EventTapHook.shared.injectVoiceTranscript(polished)
+                    let undoLen = insertedCount
+                    let updatedFrame = self.currentCaretPillFrame()
+                    CaretHUDModel.shared.onUndo = {
+                        if undoLen > 0 {
+                            EventTapHook.shared.postBackspaces(undoLen)
+                        }
+                        CaretHUDModel.shared.hideHUD()
+                    }
+                    CaretHUDModel.shared.presentVoiceCompleted(
+                        polishedText: polished,
+                        caretFrame: updatedFrame
+                    )
+                } else {
+                    CaretHUDModel.shared.presentVoiceCompleted(
+                        polishedText: polished,
+                        caretFrame: frame
+                    )
                 }
-                CaretHUDModel.shared.presentVoiceCompleted(
-                    polishedText: polished,
-                    caretFrame: frame
-                )
             }
         }
     }

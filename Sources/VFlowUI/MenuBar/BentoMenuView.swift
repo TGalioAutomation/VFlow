@@ -178,7 +178,11 @@ public struct BentoMenuView: View {
                     Spacer(minLength: 2)
 
                     Button(action: {
+                        let wasRecording = store.isRecordingVoice
                         store.toggleVoiceRecording()
+                        if !wasRecording {
+                            MenuBarCoordinator.shared.closePopover()
+                        }
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: store.isRecordingVoice ? "stop.circle.fill" : "mic.fill")

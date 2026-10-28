@@ -147,6 +147,7 @@ public final class CaretHUDModel: ObservableObject {
     public var onToggleInputMethod: (() -> Void)?
     public var onUndo: (() -> Void)?
     public var onCycleTone: (() -> Void)?
+    public var onStopVoiceRecording: (() -> Void)?
 
     private var autoHideTimer: Timer?
     private var decayTimer: Timer?
@@ -295,6 +296,14 @@ public final class CaretHUDModel: ObservableObject {
             let chosen = visible[matchedIndex]
             DispatchQueue.main.async { [weak self] in
                 self?.onSelectSuggestion?(chosen)
+            }
+            return true
+        }
+
+        // 4. If currently recording voice (state == .working), clicking the Caret Pill HUD immediately stops & injects
+        if state == .working {
+            DispatchQueue.main.async { [weak self] in
+                self?.onStopVoiceRecording?()
             }
             return true
         }
@@ -540,7 +549,7 @@ public final class CaretHUDModel: ObservableObject {
         self.text = displayText
         self.audioLevel = max(0.25, min(1.0, audioLevel))
         CaretPillWindow.shared.present(at: caretFrame)
-        resetAutoHideTimer(seconds: 15.0)
+        resetAutoHideTimer(seconds: 60.0)
     }
 
     /// Presents the finalized & polished Voice Dictation result on the Caret Pill HUD.

@@ -450,11 +450,14 @@ public final class EventTapHook: @unchecked Sendable {
             }
             lock.withLock { isCursorKnownAtEnd = false }
             engine.reset()
-            onDismissHUD?()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
-                    TypingBuffer.shared.clear()
-                    self?.onDismissHUD?()
+            if !VoiceDictationService.shared.isRecording {
+                onDismissHUD?()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    if !VoiceDictationService.shared.isRecording &&
+                       !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                        TypingBuffer.shared.clear()
+                        self?.onDismissHUD?()
+                    }
                 }
             }
             return Unmanaged.passUnretained(event)
@@ -626,6 +629,11 @@ public final class EventTapHook: @unchecked Sendable {
             logDiagnostic("UNMAPPED kc=\(keycode)")
             setLastPhysicalKey(keycode)
             return Unmanaged.passUnretained(event)
+        }
+
+        // If user starts typing on the keyboard while Voice Dictation is still listening, finalize voice recording immediately
+        if VoiceDictationService.shared.isRecording {
+            VoiceDictationService.shared.stopRecording()
         }
 
         let result = engine.processKey(char)
@@ -1053,6 +1061,7 @@ public final class EventTapHook: @unchecked Sendable {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return 0 }
 
+        let beforeValue = AccessibilityBridge.shared.readFocusedTextValue()
         var needsLeadingSpace = false
         if let ctx = AccessibilityBridge.shared.readFocusedTextContext(),
            !ctx.fullText.isEmpty {
@@ -1077,8 +1086,23 @@ public final class EventTapHook: @unchecked Sendable {
             TypingBuffer.shared.appendWord(tok)
         }
         recordTypingActivity()
-        notifyTypingState()
         logDiagnostic("VOICE_INJECT len=\(textToInsert.count) text='\(trimmed)'")
+
+        // Verify after 55ms that the target text input received the synthetic CGEvent Unicode stream;
+        // if the target control ignored synthetic events, fall back to direct Accessibility attribute insertion.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.055) { [weak self] in
+            let afterValue = AccessibilityBridge.shared.readFocusedTextValue()
+            if let before = beforeValue, let after = afterValue, before == after {
+                if AccessibilityBridge.shared.insertTextIntoFocusedElement(textToInsert) {
+                    self?.logDiagnostic("VOICE_INJECT_AX_FALLBACK len=\(textToInsert.count)")
+                }
+            } else if beforeValue == nil && afterValue == nil {
+                if AccessibilityBridge.shared.insertTextIntoFocusedElement(textToInsert) {
+                    self?.logDiagnostic("VOICE_INJECT_AX_FALLBACK_NO_READ len=\(textToInsert.count)")
+                }
+            }
+        }
+
         return textToInsert.count
     }
 

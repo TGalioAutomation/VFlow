@@ -59,6 +59,10 @@ public final class MenuBarCoordinator: NSObject {
         updateStatusItemBadge()
     }
 
+    public func closePopover() {
+        popover?.performClose(nil)
+    }
+
     @objc private func statusBarButtonClicked() {
         guard let button = statusItem?.button, let pop = popover else { return }
 

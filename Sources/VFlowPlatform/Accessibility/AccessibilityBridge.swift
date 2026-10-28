@@ -328,6 +328,29 @@ public final class AccessibilityBridge: @unchecked Sendable {
            let str = value as? String {
             return str
         }
+        var currentParent: AXUIElement = element
+        for _ in 0..<8 {
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parentVal = parentRef,
+                  CFGetTypeID(parentVal) == AXUIElementGetTypeID() else {
+                break
+            }
+            let parentEl = parentVal as! AXUIElement
+            var roleRef: CFTypeRef?
+            let parentRole = (AXUIElementCopyAttributeValue(parentEl, kAXRoleAttribute as CFString, &roleRef) == .success)
+                ? (roleRef as? String ?? "")
+                : ""
+            if parentRole == "AXWindow" || parentRole == "AXApplication" || parentRole == "AXWebArea" {
+                break
+            }
+            var parentValueRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(parentEl, kAXValueAttribute as CFString, &parentValueRef) == .success,
+               let str = parentValueRef as? String {
+                return str
+            }
+            currentParent = parentEl
+        }
         return nil
     }
 
@@ -336,6 +359,80 @@ public final class AccessibilityBridge: @unchecked Sendable {
         guard let element = focusedUIElement() else { return false }
         let res = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFTypeRef)
         return res == .success
+    }
+
+    /// Directly inserts text at the current cursor/selection of the focused text input via Accessibility APIs
+    /// (`kAXSelectedTextAttribute` or `kAXValueAttribute` splicing) as a deterministic fallback.
+    @discardableResult
+    public func insertTextIntoFocusedElement(_ text: String) -> Bool {
+        guard !text.isEmpty, let element = focusedUIElement() else { return false }
+
+        func tryInsert(on el: AXUIElement) -> Bool {
+            var settable: DarwinBoolean = false
+            if AXUIElementIsAttributeSettable(el, kAXSelectedTextAttribute as CFString, &settable) == .success,
+               settable.boolValue {
+                if AXUIElementSetAttributeValue(el, kAXSelectedTextAttribute as CFString, text as CFTypeRef) == .success {
+                    return true
+                }
+            }
+            var valSettable: DarwinBoolean = false
+            if AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &valSettable) == .success,
+               valSettable.boolValue {
+                var valueRef: CFTypeRef?
+                let existing = (AXUIElementCopyAttributeValue(el, kAXValueAttribute as CFString, &valueRef) == .success)
+                    ? (valueRef as? String ?? "")
+                    : ""
+                let nsExisting = existing as NSString
+                var insertLoc = nsExisting.length
+                var insertLen = 0
+                var rangeRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
+                   let axVal = rangeRef,
+                   CFGetTypeID(axVal) == AXValueGetTypeID() {
+                    var cfRange = CFRange(location: 0, length: 0)
+                    if AXValueGetValue((axVal as! AXValue), .cfRange, &cfRange) {
+                        insertLoc = max(0, min(nsExisting.length, cfRange.location))
+                        insertLen = max(0, min(nsExisting.length - insertLoc, cfRange.length))
+                    }
+                }
+                let updated = nsExisting.replacingCharacters(in: NSRange(location: insertLoc, length: insertLen), with: text)
+                if AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, updated as CFTypeRef) == .success {
+                    var newCursor = CFRange(location: insertLoc + (text as NSString).length, length: 0)
+                    if let newRangeVal = AXValueCreate(.cfRange, &newCursor) {
+                        _ = AXUIElementSetAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, newRangeVal)
+                    }
+                    return true
+                }
+            }
+            return false
+        }
+
+        if tryInsert(on: element) {
+            return true
+        }
+
+        var currentParent: AXUIElement = element
+        for _ in 0..<8 {
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parentVal = parentRef,
+                  CFGetTypeID(parentVal) == AXUIElementGetTypeID() else {
+                break
+            }
+            let parentEl = parentVal as! AXUIElement
+            var roleRef: CFTypeRef?
+            let parentRole = (AXUIElementCopyAttributeValue(parentEl, kAXRoleAttribute as CFString, &roleRef) == .success)
+                ? (roleRef as? String ?? "")
+                : ""
+            if parentRole == "AXWindow" || parentRole == "AXApplication" || parentRole == "AXWebArea" {
+                break
+            }
+            if tryInsert(on: parentEl) {
+                return true
+            }
+            currentParent = parentEl
+        }
+        return false
     }
 
     /// Pure parsing helper to extract cursor context from any text and cursor offset, useful for unit tests and AX extraction.

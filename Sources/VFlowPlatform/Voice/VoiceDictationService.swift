@@ -19,6 +19,12 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
     /// Defaults to false so real Microphone + Apple Speech Recognition are always used unless explicitly testing simulation.
     public var isSimulationMode: Bool = false
 
+    /// Automatically finalizes and injects recognized speech into the focused text field when the user stops speaking ("ngắt nói").
+    public var autoStopOnSilence: Bool = true
+
+    /// Silence duration (in seconds) after the last recognized word before automatically finalizing & injecting text.
+    public var silenceTimeoutSeconds: TimeInterval = 1.25
+
     /// Fired on the main thread whenever partial speech recognition text or RMS audio level updates.
     public var onPartialTranscript: (@Sendable (_ partialText: String, _ audioLevel: Float) -> Void)?
     /// Fired on the main thread when a recording session finishes with non-empty recognized text.
@@ -32,6 +38,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
     private var audioEngine = AVAudioEngine()
     private var simulationTask: Task<Void, Never>?
     private var finalizationTask: Task<Void, Never>?
+    private var silenceCheckTimer: Timer?
+    private var lastTranscriptChangeTime: CFAbsoluteTime = 0
+    private var lastVoiceAudioActivityTime: CFAbsoluteTime = 0
     private var hasEmittedFinalForCurrentSession: Bool = false
     private var workerAuthorizedSpeech: Bool = false
     private var workerAuthorizedMic: Bool = false
@@ -163,9 +172,12 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
 
         finalizationTask?.cancel()
         finalizationTask = nil
+        stopSilenceWatchdog()
         hasEmittedFinalForCurrentSession = false
         transcript = ""
         audioLevel = 0.30
+        lastTranscriptChangeTime = 0
+        lastVoiceAudioActivityTime = CFAbsoluteTimeGetCurrent()
 
         if isSimulationMode {
             isRecording = true
@@ -179,8 +191,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
         if !Self.canUseInProcessSpeechRecognizer {
             isRecording = true
             let langLabel = currentLocaleIdentifier.hasPrefix("en") ? "English" : "Tiếng Việt"
-            statusMessage = "🎙 Đang nghe (\(langLabel))... Hãy nói vào Microphone"
+            statusMessage = "🎙 Đang nghe (\(langLabel))... Tự chèn khi bạn ngắt nói"
             onRecordingStateChanged?(true, statusMessage)
+            startSilenceWatchdog()
 
             let locale = currentLocaleIdentifier
             ensureSpeechWorkerLaunched { [weak self] in
@@ -203,9 +216,12 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
     private func startStandaloneSpeechRecognition() {
         finalizationTask?.cancel()
         finalizationTask = nil
+        stopSilenceWatchdog()
         hasEmittedFinalForCurrentSession = false
         transcript = ""
         audioLevel = 0.25
+        lastTranscriptChangeTime = 0
+        lastVoiceAudioActivityTime = CFAbsoluteTimeGetCurrent()
 
         let speechStatus = SFSpeechRecognizer.authorizationStatus()
         let micStatus = AVAudioApplication.shared.recordPermission
@@ -283,6 +299,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self, self.isRecording else { return }
                         self.audioLevel = rmsLevel
+                        if rmsLevel >= 0.34 {
+                            self.lastVoiceAudioActivityTime = now
+                        }
                         self.onPartialTranscript?(self.transcript, rmsLevel)
                     }
                 }
@@ -293,9 +312,10 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
 
             isRecording = true
             let langLabel = currentLocaleIdentifier.hasPrefix("en") ? "English" : "Tiếng Việt"
-            statusMessage = "🎙 Đang nghe (\(langLabel))... Nhấn ⌥Space để kết thúc"
+            statusMessage = "🎙 Đang nghe (\(langLabel))... Tự chèn khi ngắt nói hoặc nhấn ⌥Space"
             logVoice("AudioEngine & SFSpeechRecognizer started for locale=\(currentLocaleIdentifier)")
             onRecordingStateChanged?(true, statusMessage)
+            startSilenceWatchdog()
 
             recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 guard let self = self else { return }
@@ -305,6 +325,11 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         if !text.isEmpty {
+                            if text != self.transcript {
+                                let now = CFAbsoluteTimeGetCurrent()
+                                self.lastTranscriptChangeTime = now
+                                self.lastVoiceAudioActivityTime = now
+                            }
                             self.transcript = text
                             self.logVoice("PARTIAL isFinal=\(isFinal) text='\(text)'")
                             self.onPartialTranscript?(text, self.audioLevel)
@@ -327,6 +352,7 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
                 }
             }
         } catch {
+            stopSilenceWatchdog()
             audioEngine.inputNode.removeTap(onBus: 0)
             recognitionRequest?.endAudio()
             recognitionRequest = nil
@@ -337,6 +363,33 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             logVoice("AudioEngine start catch: \(error.localizedDescription)")
             onRecordingStateChanged?(false, statusMessage)
         }
+    }
+
+    private func startSilenceWatchdog() {
+        stopSilenceWatchdog()
+        guard autoStopOnSilence else { return }
+        silenceCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.14, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRecording, self.autoStopOnSilence else { return }
+            let trimmed = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, self.lastTranscriptChangeTime > 0 else { return }
+
+            let now = CFAbsoluteTimeGetCurrent()
+            let elapsedSinceWord = now - self.lastTranscriptChangeTime
+            let elapsedSinceVoice = now - self.lastVoiceAudioActivityTime
+
+            // Trigger auto-stop & auto-inject when the user pauses speaking:
+            // - 1.25s without any new recognized words AND >= 0.60s of quiet microphone RMS, OR
+            // - 2.0s without any new recognized words regardless of ambient background hum.
+            if (elapsedSinceWord >= self.silenceTimeoutSeconds && elapsedSinceVoice >= 0.60) || elapsedSinceWord >= 2.0 {
+                self.logVoice(String(format: "AUTO_STOP_ON_SILENCE elapsedWord=%.2fs elapsedVoice=%.2fs text='%@'", elapsedSinceWord, elapsedSinceVoice, trimmed))
+                self.stopRecordingInternal()
+            }
+        }
+    }
+
+    private func stopSilenceWatchdog() {
+        silenceCheckTimer?.invalidate()
+        silenceCheckTimer = nil
     }
 
     /// Stops voice dictation and finalizes transcript on the main thread.
@@ -354,6 +407,7 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
         guard isRecording else { return }
         isRecording = false
         audioLevel = 0.0
+        stopSilenceWatchdog()
 
         if isSimulationMode || simulationTask != nil {
             simulationTask?.cancel()
@@ -370,10 +424,12 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
                 userInfo: nil,
                 deliverImmediately: true
             )
-            // Wait up to 650ms for Speech Worker to send IPCNotification.finalResult
+            // If we already have the live partial transcript from IPC, finalize quickly (280ms); otherwise wait up to 500ms
+            let hasPartialAlready = !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let waitNs: UInt64 = hasPartialAlready ? 260_000_000 : 500_000_000
             finalizationTask?.cancel()
             finalizationTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 650_000_000)
+                try? await Task.sleep(nanoseconds: waitNs)
                 guard let self = self, !Task.isCancelled else { return }
                 self.finishAndEmitTranscript()
             }
@@ -386,9 +442,11 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
         }
         recognitionRequest?.endAudio()
 
+        let hasPartialAlready = !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let waitNs: UInt64 = hasPartialAlready ? 180_000_000 : 320_000_000
         finalizationTask?.cancel()
         finalizationTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(nanoseconds: waitNs)
             guard let self = self, !Task.isCancelled else { return }
             self.finishAndEmitTranscript()
             self.recognitionTask?.cancel()
@@ -400,6 +458,7 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
     private func finishAndEmitTranscript() {
         guard !hasEmittedFinalForCurrentSession else { return }
         hasEmittedFinalForCurrentSession = true
+        stopSilenceWatchdog()
 
         let finalClean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if !finalClean.isEmpty {
@@ -427,6 +486,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             guard let self = self, self.isRecording else { return }
             if let level = note.userInfo?["audioLevel"] as? Float {
                 self.audioLevel = level
+                if level >= 0.34 {
+                    self.lastVoiceAudioActivityTime = CFAbsoluteTimeGetCurrent()
+                }
                 self.onPartialTranscript?(self.transcript, level)
             }
         }
@@ -436,6 +498,11 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             let level = (note.userInfo?["audioLevel"] as? Float) ?? self.audioLevel
             self.audioLevel = level
             if !text.isEmpty {
+                if text != self.transcript {
+                    let now = CFAbsoluteTimeGetCurrent()
+                    self.lastTranscriptChangeTime = now
+                    self.lastVoiceAudioActivityTime = now
+                }
                 self.transcript = text
             }
             self.onPartialTranscript?(self.transcript, level)
@@ -445,6 +512,9 @@ public final class VoiceDictationService: ObservableObject, @unchecked Sendable 
             if let text = note.userInfo?["text"] as? String, !text.isEmpty {
                 self.transcript = text
             }
+            self.isRecording = false
+            self.audioLevel = 0.0
+            self.stopSilenceWatchdog()
             self.finalizationTask?.cancel()
             self.finishAndEmitTranscript()
         }
