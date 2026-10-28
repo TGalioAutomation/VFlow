@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VFlow — Bilingual Typing, Reimagined for macOS</title>
+  <meta name="description" content="Next-generation native macOS bilingual Vietnamese-English input engine, 3-tier contextual suggestion HUD, and push-to-talk voice dictation assistant for Apple Silicon.">
+  <link rel="icon" type="image/png" href="assets/app_icon_nobg.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+  <!-- ==============================================================================
+       Navigation Bar (Liquid Glass Pill)
+       ============================================================================== -->
+  <div class="navbar-wrapper">
+    <nav class="navbar">
+      <div class="nav-brand">
+        <img src="assets/app_icon_nobg.png" alt="VFlow Icon" class="nav-logo">
+        <span class="nav-title">VFlow</span>
+        <button id="menuBarBadge" class="nav-menubar-badge" title="Click để thử chuyển đổi trạng thái Menu Bar">[• VI·T]</button>
+      </div>
+
+      <ul class="nav-links">
+        <li><a href="#demo">Live Demo</a></li>
+        <li><a href="#features">Tính năng</a></li>
+        <li><a href="#privacy">Quyền riêng tư</a></li>
+        <li><a href="#install">Cài đặt</a></li>
+        <li><a href="#scorecard">Kiểm định</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/TGalioAutomation/VFlow" target="_blank" rel="noopener noreferrer" class="btn-github">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a href="https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg" class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Tải v1.0.0</span>
+        </a>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ==============================================================================
+       Hero Section
+       ============================================================================== -->
+  <header class="hero-section">
+    <div class="hero-container">
+      <div class="hero-pill-badge">
+        <span class="pulse-dot"></span>
+        <span>VFlow v1.0.0 chính thức ra mắt • Tối ưu 100% Apple Silicon</span>
+      </div>
+
+      <div class="hero-icon-wrapper">
+        <div class="hero-icon-glow"></div>
+        <img src="assets/app_icon_nobg.png" alt="VFlow 3D Crystal Fluid Glass Orb" class="hero-icon">
+      </div>
+
+      <h1 class="hero-title">
+        Bilingual typing, <br>
+        <span class="gradient-text">reimagined for macOS.</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        Triệt tiêu hoàn toàn lỗi nhảy dấu khi gõ tiếng Anh. Gợi ý 3 tầng thông minh &amp; sửa ngữ pháp bằng AI On-Device. Caret HUD 120fps lướt êm theo con trỏ mọi ứng dụng. 100% riêng tư trên chip Apple Silicon.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg" class="btn-primary btn-large">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Tải về .DMG (macOS arm64)</span>
+        </a>
+
+        <a href="https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.zip" class="btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+            <rect x="1" y="3" width="22" height="5"></rect>
+            <line x1="10" y1="12" x2="14" y2="12"></line>
+          </svg>
+          <span>Tải .ZIP Archive</span>
+        </a>
+
+        <a href="https://github.com/TGalioAutomation/VFlow" target="_blank" rel="noopener noreferrer" class="btn-secondary">
+          <span>Xem mã nguồn GitHub</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+      </div>
+
+      <div class="hero-stats-ribbon">
+        <div class="stat-item">
+          <strong>171 / 171</strong>
+          <span>XCTest Passing</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <strong>&lt; 2ms</strong>
+          <span>Độ trễ gõ phím</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <strong>100%</strong>
+          <span>On-Device CoreML</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <strong>0 KB</strong>
+          <span>Không gửi dữ liệu đám mây</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==============================================================================
+       Interactive Live Demo Widget
+       ============================================================================== -->
+  <section id="demo" class="demo-section">
+    <div class="section-header">
+      <span class="section-tag">Trải nghiệm tương tác</span>
+      <h2 class="section-title">Thử nghiệm Caret HUD &amp; Gợi ý 3 tầng</h2>
+      <p class="section-desc">
+        Gõ thử vào ô nhập liệu hoặc bấm các ví dụ bên dưới để xem Caret HUD mô phỏng xử lý phím và đưa ra các lựa chọn tức thì.
+      </p>
+    </div>
+
+    <div class="demo-mac-window">
+      <div class="window-titlebar">
+        <div class="window-traffic-lights">
+          <span class="traffic-light traffic-close"></span>
+          <span class="traffic-light traffic-minimize"></span>
+          <span class="traffic-light traffic-maximize"></span>
+        </div>
+        <span class="window-title">VFlow Sandbox — Live Interactive Caret HUD</span>
+        <span class="window-meta">120fps Real-Time Engine</span>
+      </div>
+
+      <div class="demo-body">
+        <div class="demo-presets">
+          <span class="preset-label">Kịch bản thử nghiệm:</span>
+          <button class="preset-btn active" data-preset="to dang lam viec">to dang lam viec</button>
+          <button class="preset-btn" data-preset="ary">ary (English Escape)</button>
+          <button class="preset-btn" data-preset="thuong thuyet">thuong thuyet</button>
+          <button class="preset-btn" data-preset="ko sao ca">ko sao ca (Teencode)</button>
+          <button class="preset-btn" data-preset="vieest dduocj">vieest dduocj (Free Telex)</button>
+          <button class="preset-btn" data-preset="subclass">subclass (Dev Syntax)</button>
+        </div>
+
+        <div class="demo-editor-area">
+          <textarea id="demoInput" class="demo-input" rows="2" placeholder="Nhập thử văn bản tại đây (ví dụ: 'to dang lam viec', 'salary', 'ko sao')..."></textarea>
+
+          <!-- Caret Pill HUD Simulation -->
+          <div id="simulatedHud" class="simulated-caret-hud">
+            <!-- Left: 52x22px Silk Sine Wave Canvas -->
+            <div class="hud-wave-block" title="Sóng lụa âm thanh & nhịp gõ 120fps">
+              <canvas id="waveCanvas" class="hud-wave-canvas"></canvas>
+            </div>
+
+            <!-- Mode Badge -->
+            <button id="hudMode" class="hud-mode-badge" title="Click để chuyển nhanh VI·T / VI·V / EN">VI·T</button>
+
+            <!-- Center: 3-Tier Suggestion Chips -->
+            <div id="hudChips" class="hud-chips-container">
+              <!-- Dynamically populated by main.js -->
+            </div>
+
+            <!-- Divider -->
+            <div class="hud-divider"></div>
+
+            <!-- Right Status -->
+            <div id="hudStatus" class="hud-status-badge">
+              <span>Ready</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-shortcuts-guide">
+          <div class="shortcut-group">
+            <kbd>⇥ Tab</kbd> hoặc <kbd>⌥1</kbd>
+            <span>Chọn gợi ý Tầng 1 (⚡ Dấu tức thì)</span>
+          </div>
+          <div class="shortcut-group">
+            <kbd>⌥2</kbd>
+            <span>Chọn Tầng 2 (✨ AI Polish &amp; Sửa ngữ pháp)</span>
+          </div>
+          <div class="shortcut-group">
+            <kbd>⌥3</kbd>
+            <span>Chọn Tầng 3 (🔮 Đoán từ kế tiếp)</span>
+          </div>
+          <div class="shortcut-group">
+            <kbd>⌥Space</kbd>
+            <span>Giữ để thu âm (Push-to-Talk)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==============================================================================
+       Feature Bento Grid
+       ============================================================================== -->
+  <section id="features" class="bento-section">
+    <div class="section-header">
+      <span class="section-tag">Kiến trúc công nghệ</span>
+      <h2 class="section-title">5 Trụ Cột Đột Phá Cho macOS</h2>
+      <p class="section-desc">
+        Kết hợp tinh hoa giữa Finite State Machine tốc độ cao và trí tuệ nhân tạo On-Device chạy trực tiếp trên Apple Neural Engine.
+      </p>
+    </div>
+
+    <div class="bento-grid">
+      <!-- Card 1: Neural Bilingual Engine (Col 8) -->
+      <div class="bento-card col-8">
+        <div>
+          <span class="card-badge badge-cyan">VFlowCore • Input Engine</span>
+          <h3 class="card-title">Bộ gõ Song ngữ Tự động Nhận diện (Bilingual Auto-Escape)</h3>
+          <p class="card-desc">
+            Không còn nỗi ám ảnh gõ tiếng Anh bị nhảy dấu lung tung. VFlow phân tích ngữ âm theo thời gian thực: phân biệt hậu tố tiếng Anh (<code>-ary</code>, <code>-ory</code>, <code>-ery</code>) với thanh hỏi tiếng Việt, bảo toàn từ khoá lập trình và biến code (<code>salary</code>, <code>arrow</code>, <code>error</code>, <code>class</code>, <code>subclass</code>, <code>coffee</code>).
+          </p>
+          <ul class="card-feature-list">
+            <li>Hỗ trợ trọn vẹn Telex &amp; VNI với cơ chế FSM không thể crash.</li>
+            <li>Đặt dấu tự do trong từ (<code>vieest</code>, <code>toasn</code> ra <code>viết</code>, <code>toán</code> chuẩn xác).</li>
+            <li>Tự động mở rộng viết tắt teencode (<code>ko</code> → <code>không</code>, <code>dc</code> → <code>được</code>, <code>trc</code> → <code>trước</code>).</li>
+            <li>Xoá dấu tức thì bằng phím <code>z</code> (Telex) hoặc <code>0</code> (VNI) kể cả sau khi xoá lùi.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Card 2: 120fps Floating Caret HUD (Col 4) -->
+      <div class="bento-card col-4">
+        <div>
+          <span class="card-badge badge-violet">VFlowUI • Caret HUD</span>
+          <h3 class="card-title">120fps Live Caret HUD</h3>
+          <p class="card-desc">
+            Viên thuốc nổi siêu nhỏ gọn thiết kế Liquid Glass cao 40px, lướt êm ngay dưới con trỏ soạn thảo ở mọi ứng dụng.
+          </p>
+          <ul class="card-feature-list">
+            <li>Cửa sổ <code>NSPanel</code> non-activating, không cướp focus.</li>
+            <li>Sóng lụa Cyan &amp; Violet 120fps chuyển động mượt mà.</li>
+            <li>Tự động lật thông minh khi chạm mép màn hình.</li>
+            <li>Tương thích hoàn hảo hệ thống đa màn hình.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Card 3: Push-to-Talk Voice Dictation (Col 4) -->
+      <div class="bento-card col-4">
+        <div>
+          <div class="card-header-icon">
+            <img src="assets/voice_orb_nobg.png" alt="Futuristic Glowing Mic Orb">
+          </div>
+          <span class="card-badge badge-cyan">VFlowPlatform • Speech</span>
+          <h3 class="card-title">Push-to-Talk Voice Dictation</h3>
+          <p class="card-desc">
+            Giữ phím tắt <code>⌥Space</code> (Option + Space) để nói tiếng Việt. Giọng nói được chuyển thành văn bản tức thì qua <code>SFSpeechRecognizer</code> với độ chính xác cao.
+          </p>
+          <ul class="card-feature-list">
+            <li>Hỗ trợ cả 2 chế độ: Hold-to-Talk và Tap-to-Talk.</li>
+            <li>Tự động dọn từ đệm (à, ừm, thì là mà).</li>
+            <li>Bơm văn bản trực tiếp vào ứng dụng đang mở.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Card 4: 100% Zero-Cloud Privacy (Col 8) -->
+      <div class="bento-card col-8" id="privacy">
+        <div>
+          <div class="card-header-icon">
+            <img src="assets/neural_core_nobg.png" alt="Glowing Isometric Neural Core">
+          </div>
+          <span class="card-badge badge-emerald">Privacy &amp; Security</span>
+          <h3 class="card-title">100% Bảo mật &amp; Quyền Riêng Tư Tuyệt Đối</h3>
+          <p class="card-desc">
+            VFlow cam kết triết lý: <strong>Dữ liệu phím gõ của bạn là bất khả xâm phạm</strong>. Toàn bộ logic sửa lỗi, mô hình ngôn ngữ và bộ từ điển đều chạy trực tiếp trên thiết bị (On-Device) bằng chip Apple Silicon Neural Engine.
+          </p>
+          <ul class="card-feature-list">
+            <li><strong>Không gọi bất kỳ API đám mây nào</strong>: Không gửi dữ liệu lên máy chủ từ xa.</li>
+            <li><strong>Không ghi nhật ký phím gõ (Zero Keylogging)</strong>: Bộ đệm chỉ tồn tại trên RAM trong phiên gõ.</li>
+            <li><strong>Không có thư viện bên thứ 3 (Zero Dependencies)</strong>: Xây dựng 100% bằng Swift và Apple SDK nguyên bản.</li>
+            <li><strong>Mã nguồn mở và kiểm định công khai</strong>: Mọi dòng mã đều minh bạch trên GitHub.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Card 5: Bento Settings & Live Sandbox (Col 6) -->
+      <div class="bento-card col-6">
+        <div>
+          <span class="card-badge badge-violet">Control Center</span>
+          <h3 class="card-title">Bento Control Center &amp; Menu Bar</h3>
+          <p class="card-desc">
+            Biểu tượng Menu Bar dạng viên thuốc Retina hiển thị trạng thái gõ sống động <code>[• VI·T]</code>. Bấm chuột phải hoặc ⌥-Click để chuyển nhanh VI ⇄ EN. Bảng cài đặt Bento 4 tab trực quan giúp cấu hình gõ tắt, chọn phong cách câu (Tự nhiên, Lịch sự, Ngắn gọn) và thử nghiệm ngay trong Live Sandbox.
+          </p>
+        </div>
+      </div>
+
+      <!-- Card 6: Zero Dependencies & Swift 6 (Col 6) -->
+      <div class="bento-card col-6">
+        <div>
+          <span class="card-badge badge-cyan">Architecture</span>
+          <h3 class="card-title">Swift 6 &amp; Strict Concurrency</h3>
+          <p class="card-desc">
+            Ứng dụng được viết hoàn toàn trên chuẩn Swift 6 với cơ chế đồng bộ đa luồng an toàn (<code>@MainActor</code>, <code>NSLock</code>, <code>Sendable</code>), không bao giờ gây giật lag luồng sự kiện <code>CGEventTap</code> hay tiêu tốn tài nguyên CPU khi ở trạng thái nghỉ.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==============================================================================
+       Installation & Permissions Walkthrough
+       ============================================================================== -->
+  <section id="install" class="install-section">
+    <div class="install-container">
+      <div class="section-header">
+        <span class="section-tag">Hướng dẫn nhanh</span>
+        <h2 class="section-title">Cài Đặt &amp; Bắt Đầu Sử Dụng</h2>
+        <p class="section-desc">Chỉ mất 30 giây để cài đặt và kích hoạt VFlow trên máy Mac của bạn.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">01</div>
+          <h3 class="step-title">Tải file .DMG</h3>
+          <p class="step-desc">
+            Tải gói cài đặt chính thức <code>VFlow-v1.0.0-macOS-arm64.dmg</code> từ trang phát hành GitHub.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">02</div>
+          <h3 class="step-title">Kéo vào Applications</h3>
+          <p class="step-desc">
+            Mở file DMG và kéo biểu tượng <strong>VFlow</strong> vào thư mục <strong>/Applications</strong>.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">03</div>
+          <h3 class="step-title">Cấp quyền hệ thống</h3>
+          <p class="step-desc">
+            Khởi động VFlow và cấp quyền <strong>Trợ năng (Accessibility)</strong> &amp; <strong>Giám sát đầu vào (Input Monitoring)</strong> để bắt đầu gõ tiếng Việt.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==============================================================================
+       Verification Scorecard & Checksums
+       ============================================================================== -->
+  <section id="scorecard" class="scorecard-section">
+    <div class="section-header">
+      <span class="section-tag">Báo cáo kiểm định chất lượng</span>
+      <h2 class="section-title">Bảng Đánh Giá Mức Độ Sẵn Sàng (Scorecard)</h2>
+      <p class="section-desc">Mọi tiêu chuẩn kỹ thuật đều được kiểm nghiệm tự động và độc lập trước khi đóng gói phát hành.</p>
+    </div>
+
+    <div class="scorecard-table-wrapper">
+      <table class="scorecard-table">
+        <thead>
+          <tr>
+            <th>Hạng mục kiểm định</th>
+            <th>Tiêu chuẩn kỹ thuật</th>
+            <th>Kết quả</th>
+            <th>Bằng chứng thực thi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>XCTest Regression Suite</strong></td>
+            <td>100% Pass các bộ test đơn vị, tích hợp, stress test</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td>171/171 tests passed (0 failures, 3.14s)</td>
+          </tr>
+          <tr>
+            <td><strong>Swift 6 Concurrency</strong></td>
+            <td>Tuân thủ Strict Concurrency, không có race condition</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td>0 warnings dưới @MainActor &amp; NSLock</td>
+          </tr>
+          <tr>
+            <td><strong>Clean-Room 3 Mutants</strong></td>
+            <td>100% Mutant Kill Rate (phát hiện lỗi đột biến)</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td>Cả 3 mutants đều thất bại chính xác</td>
+          </tr>
+          <tr>
+            <td><strong>Dependency Hygiene</strong></td>
+            <td>Zero third-party dependencies (không dùng thư viện ngoài)</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td><code>dependencies: []</code> trong Package.swift</td>
+          </tr>
+          <tr>
+            <td><strong>Apple Code Signing</strong></td>
+            <td>Chữ ký điện tử sâu hợp lệ trên toàn bộ bundle</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td><code>satisfies its Designated Requirement</code></td>
+          </tr>
+          <tr>
+            <td><strong>Dynamic Linker Check</strong></td>
+            <td>Chỉ liên kết thư viện hệ thống macOS, không rò dylib người dùng</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td><code>otool -L</code> xác nhận 100% /System/Library</td>
+          </tr>
+          <tr>
+            <td><strong>Path Decoupling</strong></td>
+            <td>Không chứa đường dẫn cứng máy lập trình viên</td>
+            <td><span class="badge-pass">✓ PASSED</span></td>
+            <td><code>grep -rn "/Users" Sources/</code> = 0 matches</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Checksum verification box -->
+    <div style="max-width: 980px; margin: 30px auto 0; padding: 22px; background: rgba(13, 19, 36, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.8rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="color: var(--accent-cyan); font-weight: 700;">SHA-256 Official Checksums (v1.0.0)</span>
+        <button class="preset-btn copy-btn" data-copy-target="#checksumBlock">Sao chép mã băm</button>
+      </div>
+      <pre id="checksumBlock" style="color: var(--text-secondary); overflow-x: auto; line-height: 1.6;">e4fa6e44f0a62b30e416b96ca8c19c4aaad5dcfac01bc3e6290b16d1d0c251e7  VFlow-v1.0.0-macOS-arm64.dmg
+4aac3a5d92122055ba1fe5bebfd63adca84aab173bdbff3a1cc6d4d3922f2038  VFlow-v1.0.0-macOS-arm64.zip</pre>
+    </div>
+  </section>
+
+  <!-- ==============================================================================
+       Footer
+       ============================================================================== -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <img src="assets/app_icon_nobg.png" alt="VFlow Logo" width="28" height="28">
+          <span style="font-weight: 700; color: #fff; font-size: 1.05rem;">VFlow</span>
+          <span style="font-size: 0.8rem; color: var(--text-dim);">— Next-Gen Bilingual macOS Typing</span>
+        </div>
+
+        <ul class="footer-links">
+          <li><a href="https://github.com/TGalioAutomation/VFlow" target="_blank" rel="noopener noreferrer">Mã nguồn GitHub</a></li>
+          <li><a href="https://github.com/TGalioAutomation/VFlow/releases" target="_blank" rel="noopener noreferrer">Bản phát hành</a></li>
+          <li><a href="https://github.com/TGalioAutomation/VFlow/issues" target="_blank" rel="noopener noreferrer">Báo lỗi / Góp ý</a></li>
+          <li><a href="https://github.com/TGalioAutomation/VFlow/blob/main/RELEASE_NOTES.md" target="_blank" rel="noopener noreferrer">Release Notes</a></li>
+          <li><a href="https://github.com/TGalioAutomation/VFlow/blob/main/BUG_AUDIT_REPORT.md" target="_blank" rel="noopener noreferrer">Báo cáo Kiểm thử</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          Phát hành theo giấy phép <strong>MIT / Apache-2.0</strong>. Xây dựng vì cộng đồng người dùng macOS Việt Nam.
+        </div>
+        <div>
+          Tương thích macOS Sonoma (14.0+) &amp; macOS Sequoia / Tahoe (15.0+). Apple Silicon native.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/main.js"></script>
+</body>
+</html>

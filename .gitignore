@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+*.xcuserstate
+
+# Swift & SPM
+.build/
+.swiftpm/
+
+# Build & Release Output
+build/
+
+# Internal Agent & Clean-Room Metadata
+.agents/
+clean-room/
+
+# Xcode & Developer artifacts
+DerivedData/
+*.xcodeproj
+*.xcworkspace
