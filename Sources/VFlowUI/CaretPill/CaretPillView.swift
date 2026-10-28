@@ -79,9 +79,54 @@ public struct CaretPillView: View {
         }
     }
 
+    public var isLongCardMode: Bool {
+        if let first = visibleSuggestions.first,
+           first.kind == .aiPolish,
+           (first.text.count > 56 || first.text.contains("\n")) {
+            return true
+        }
+        return false
+    }
+
     public var body: some View {
         let pillAccent = accentColor(for: effectiveSeverity)
 
+        Group {
+            if isLongCardMode, let first = visibleSuggestions.first {
+                longCardBody(item: first, pillAccent: pillAccent)
+            } else {
+                compactPillBody(pillAccent: pillAccent)
+            }
+        }
+        .background(
+            // Deep Obsidian (#0D1324) 96% + Rounded UltraThin blur (no rectangular corner bleed)
+            ZStack {
+                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, cornerRadius: isLongCardMode ? 18 : 20)
+                Color(red: 13/255, green: 19/255, blue: 36/255).opacity(0.95)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: isLongCardMode ? 18 : 20, style: .continuous))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: isLongCardMode ? 18 : 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: isLongCardMode ? 18 : 20, style: .continuous)
+                .stroke(
+                    pillAccent.opacity(effectiveSeverity == .normal ? 0.35 : 0.72),
+                    lineWidth: effectiveSeverity == .normal ? 1.0 : 1.35
+                )
+        )
+        .shadow(
+            color: effectiveSeverity == .normal ? Color.black.opacity(0.35) : pillAccent.opacity(0.28),
+            radius: effectiveSeverity == .normal ? 8 : 11,
+            x: 0,
+            y: 4
+        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .coordinateSpace(name: "CaretPillRoot")
+    }
+
+    @ViewBuilder
+    private func compactPillBody(pillAccent: Color) -> some View {
         HStack(spacing: 8) {
             // Block 1: Left 52x22px Silk Sine-Wave + VI/EN Mode Badge
             SilkSineWaveView(
@@ -91,43 +136,7 @@ public struct CaretPillView: View {
             )
             .padding(.leading, 8)
 
-            Button(action: onToggleInputMethod) {
-                let modeLabel = inputMethod == .off ? "EN" : "VI"
-                let badgeText = OnDeviceAIEngine.isFoundationModelAvailable ? "\(modeLabel)·AI" : modeLabel
-                Text(badgeText)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(
-                        inputMethod == .off
-                            ? Color(red: 148/255, green: 163/255, blue: 184/255)
-                            : pillAccent
-                    )
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(
-                        (inputMethod == .off ? Color.white.opacity(0.06) : pillAccent.opacity(0.16))
-                    )
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                inputMethod == .off
-                                    ? Color.white.opacity(0.12)
-                                    : pillAccent.opacity(0.40),
-                                lineWidth: 0.5
-                            )
-                    )
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .background(
-                GeometryReader { geo in
-                    let frame = geo.frame(in: .named("CaretPillRoot"))
-                    Color.clear
-                        .onAppear { onUpdateModeButtonFrame?(frame) }
-                        .onChange(of: frame) { _, newFrame in onUpdateModeButtonFrame?(newFrame) }
-                }
-            )
-            .help("Chuyển nhanh VI ⇄ EN (⌥Z)")
+            modeToggleButton(pillAccent: pillAccent)
 
             // Block 2: Center Interactive Suggestions or Live Text Area
             if !visibleSuggestions.isEmpty {
@@ -156,33 +165,284 @@ public struct CaretPillView: View {
                 .padding(.trailing, 10)
         }
         .frame(minHeight: 40)
-        .padding(.vertical, visibleSuggestions.first.map { $0.kind == .aiPolish && $0.text.count > 68 } == true ? 4 : 0)
         .fixedSize(horizontal: true, vertical: true)
-        .background(
-            // Deep Obsidian (#0D1324) 96% + Rounded UltraThin blur (no rectangular corner bleed)
-            ZStack {
-                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, cornerRadius: 20)
-                Color(red: 13/255, green: 19/255, blue: 36/255).opacity(0.94)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(
-                    pillAccent.opacity(effectiveSeverity == .normal ? 0.35 : 0.72),
-                    lineWidth: effectiveSeverity == .normal ? 1.0 : 1.35
+    }
+
+    @ViewBuilder
+    private func longCardBody(item: SuggestionItem, pillAccent: Color) -> some View {
+        let chipSeverity = max(item.severity, effectiveSeverity)
+        let chipColor: Color = {
+            if chipSeverity == .high { return accentColor(for: .high) }
+            if chipSeverity == .moderate { return accentColor(for: .moderate) }
+            return Color(red: 168/255, green: 85/255, blue: 247/255)
+        }()
+        let changedCount = Self.countChangedWords(raw: text, polished: item.text)
+        let estLines = Self.estimatedLineCount(for: item.text)
+
+        VStack(alignment: .leading, spacing: 6) {
+            // Tier 1: Top Header Bar (Silk Wave + VI·AI + Shortcut Header Pill + Undo/Tone Controls)
+            HStack(spacing: 8) {
+                SilkSineWaveView(
+                    state: state,
+                    audioLevel: audioLevel,
+                    severity: effectiveSeverity
                 )
+
+                modeToggleButton(pillAccent: pillAccent)
+
+                Button(action: { onSelectSuggestion(item) }) {
+                    HStack(spacing: 5) {
+                        Text(acceptShortcut.shortBadge)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(isDoubleTabArmed ? Color.white : chipColor)
+                            .padding(.horizontal, isDoubleTabArmed ? 4 : 2)
+                            .padding(.vertical, 1)
+                            .background(isDoubleTabArmed ? chipColor.opacity(0.85) : chipColor.opacity(0.16))
+                            .clipShape(Capsule())
+
+                        Text(changedCount > 0
+                             ? "✨ Gợi ý sửa toàn văn bản (\(changedCount) vị trí)"
+                             : "✨ Gợi ý sửa toàn văn bản")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(chipColor)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(chipColor.opacity(0.14))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(chipColor.opacity(0.42), lineWidth: 0.7)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 8)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 1, height: 18)
+
+                rightSection
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 7)
+
+            // Tier 2: Full-width Diff-Highlighted Multi-Line Card (up to 4-5 visible lines + smooth vertical scroll)
+            Button(action: { onSelectSuggestion(item) }) {
+                Group {
+                    if estLines >= 5 {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            Self.highlightedDiffText(
+                                raw: text,
+                                polished: item.text,
+                                baseColor: Color(red: 226/255, green: 232/255, blue: 240/255),
+                                highlightColor: chipSeverity == .high
+                                    ? Color(red: 253/255, green: 164/255, blue: 175/255)
+                                    : Color(red: 253/255, green: 224/255, blue: 71/255)
+                            )
+                            .lineSpacing(3)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.trailing, 4)
+                        }
+                        .frame(height: 96)
+                    } else {
+                        Self.highlightedDiffText(
+                            raw: text,
+                            polished: item.text,
+                            baseColor: Color(red: 226/255, green: 232/255, blue: 240/255),
+                            highlightColor: chipSeverity == .high
+                                ? Color(red: 253/255, green: 164/255, blue: 175/255)
+                                : Color(red: 253/255, green: 224/255, blue: 71/255)
+                        )
+                        .lineSpacing(3)
+                        .lineLimit(5)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(chipColor.opacity(chipSeverity == .high ? 0.20 : 0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(
+                            chipColor.opacity(chipSeverity == .high ? 0.62 : 0.42),
+                            lineWidth: isDoubleTabArmed ? 1.4 : 0.85
+                        )
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .background(
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .named("CaretPillRoot"))
+                    Color.clear
+                        .onAppear { onUpdateChipFrame?(0, frame) }
+                        .onChange(of: frame) { _, newFrame in onUpdateChipFrame?(0, newFrame) }
+                }
+            )
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+            .help("Click chuột, \(acceptShortcut.shortBadge) hoặc ⌥1 để thay thế toàn bộ văn bản")
+        }
+        .frame(width: 560)
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    @ViewBuilder
+    private func modeToggleButton(pillAccent: Color) -> some View {
+        Button(action: onToggleInputMethod) {
+            let modeLabel = inputMethod == .off ? "EN" : "VI"
+            let badgeText = OnDeviceAIEngine.isFoundationModelAvailable ? "\(modeLabel)·AI" : modeLabel
+            Text(badgeText)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundColor(
+                    inputMethod == .off
+                        ? Color(red: 148/255, green: 163/255, blue: 184/255)
+                        : pillAccent
+                )
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    (inputMethod == .off ? Color.white.opacity(0.06) : pillAccent.opacity(0.16))
+                )
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            inputMethod == .off
+                                ? Color.white.opacity(0.12)
+                                : pillAccent.opacity(0.40),
+                            lineWidth: 0.5
+                        )
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { geo in
+                let frame = geo.frame(in: .named("CaretPillRoot"))
+                Color.clear
+                    .onAppear { onUpdateModeButtonFrame?(frame) }
+                    .onChange(of: frame) { _, newFrame in onUpdateModeButtonFrame?(newFrame) }
+            }
         )
-        .shadow(
-            color: effectiveSeverity == .normal ? Color.black.opacity(0.35) : pillAccent.opacity(0.28),
-            radius: effectiveSeverity == .normal ? 8 : 11,
-            x: 0,
-            y: 4
-        )
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .coordinateSpace(name: "CaretPillRoot")
+        .help("Chuyển nhanh VI ⇄ EN (⌥Z)")
+    }
+
+    /// Estimates the number of visual lines needed to render `text` inside the 536px card text area.
+    public static func estimatedLineCount(for text: String) -> Int {
+        let paragraphs = text.components(separatedBy: "\n")
+        var totalLines = 0
+        for p in paragraphs {
+            let count = max(1, p.count)
+            totalLines += max(1, Int(ceil(Double(count) / 64.0)))
+        }
+        return totalLines
+    }
+
+    /// Counts how many words in `polished` differ from `raw` using a sliding lookahead window.
+    public static func countChangedWords(raw: String, polished: String) -> Int {
+        let rawWords = raw.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let polWords = polished.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        guard !rawWords.isEmpty, !polWords.isEmpty else { return 0 }
+        var rawIdx = 0
+        var changed = 0
+        for word in polWords {
+            let upper = min(rawWords.count, rawIdx + 8)
+            var matchedAt: Int? = nil
+            if rawIdx < upper {
+                for k in rawIdx..<upper where rawWords[k] == word {
+                    matchedAt = k
+                    break
+                }
+            }
+            if let k = matchedAt {
+                rawIdx = k + 1
+            } else {
+                changed += 1
+                if rawIdx < rawWords.count {
+                    rawIdx += 1
+                }
+            }
+        }
+        return changed
+    }
+
+    /// Builds a SwiftUI `Text` that highlights repaired/changed tokens in `polished` compared to `raw`.
+    public static func highlightedDiffText(
+        raw: String,
+        polished: String,
+        baseColor: Color,
+        highlightColor: Color
+    ) -> Text {
+        let rawWords = raw.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        guard !rawWords.isEmpty else {
+            return Text(polished)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundColor(baseColor)
+        }
+
+        // Tokenize `polished` into alternating word and whitespace/newline runs so layout & line breaks are 100% preserved
+        var segments: [(text: String, isWord: Bool)] = []
+        var current = ""
+        var currentIsWord: Bool? = nil
+        for ch in polished {
+            let isWS = ch.isWhitespace || ch.isNewline
+            let isWord = !isWS
+            if let prev = currentIsWord, prev != isWord {
+                segments.append((current, prev))
+                current = String(ch)
+                currentIsWord = isWord
+            } else {
+                current.append(ch)
+                currentIsWord = isWord
+            }
+        }
+        if let lastIsWord = currentIsWord, !current.isEmpty {
+            segments.append((current, lastIsWord))
+        }
+
+        var rawIdx = 0
+        var attr = AttributedString()
+        for seg in segments {
+            if !seg.isWord {
+                var ws = AttributedString(seg.text)
+                ws.font = .system(size: 12.5, weight: .regular)
+                ws.foregroundColor = baseColor
+                attr.append(ws)
+            } else {
+                let upper = min(rawWords.count, rawIdx + 8)
+                var matchedAt: Int? = nil
+                if rawIdx < upper {
+                    for k in rawIdx..<upper where rawWords[k] == seg.text {
+                        matchedAt = k
+                        break
+                    }
+                }
+                var wordAttr = AttributedString(seg.text)
+                if let k = matchedAt {
+                    rawIdx = k + 1
+                    wordAttr.font = .system(size: 12.5, weight: .regular)
+                    wordAttr.foregroundColor = baseColor
+                } else {
+                    if rawIdx < rawWords.count {
+                        rawIdx += 1
+                    }
+                    wordAttr.font = .system(size: 12.5, weight: .bold)
+                    wordAttr.foregroundColor = highlightColor
+                }
+                attr.append(wordAttr)
+            }
+        }
+        return Text(attr)
     }
 
     private var visibleSuggestions: [SuggestionItem] {

@@ -90,9 +90,108 @@ public struct VietnameseTextPolisher: Sendable {
         return enMatches * 2 >= tokens.count
     }
 
-    /// Polishes raw text according to the selected tone (supporting both Vietnamese and English spelling & grammar).
+    /// Polishes raw text according to the selected tone (supporting multi-paragraph `\n`, multi-sentence `.`, and Bilingual Vietnamese + English spelling & grammar).
     public static func polish(_ text: String, tone: PolishTone = .natural) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        if trimmed.contains("\n") {
+            let lines = trimmed.components(separatedBy: "\n")
+            let polishedLines = lines.map { line -> String in
+                let cleanLine = line.trimmingCharacters(in: .whitespaces)
+                guard !cleanLine.isEmpty else { return "" }
+                var p = polishSingleParagraph(cleanLine, tone: tone)
+                if let first = p.first, first.isLowercase {
+                    p = first.uppercased() + p.dropFirst()
+                }
+                return p
+            }
+            return polishedLines.joined(separator: "\n")
+        }
+
+        return polishSingleParagraph(trimmed, tone: tone)
+    }
+
+    private static func polishSingleParagraph(_ paragraph: String, tone: PolishTone) -> String {
+        // Normalize spaces before punctuation first so "pháp . cho" becomes "pháp. cho"
+        let preNormalized = normalizePunctuation(paragraph)
+
+        // If the paragraph contains multiple sentences separated by ". ", "! ", or "? ",
+        // polish each sentence segment individually so mixed VI/EN sentences and post-period capitalization work seamlessly.
+        let sentenceSplits = splitSentencesPreservingDelimiters(preNormalized)
+        if sentenceSplits.count > 1 {
+            var rebuilt: [String] = []
+            for part in sentenceSplits {
+                var polishedPart = polishSingleClause(part.sentence, tone: tone)
+                if let first = polishedPart.first, first.isLowercase {
+                    polishedPart = first.uppercased() + polishedPart.dropFirst()
+                }
+                if !part.delimiter.isEmpty && !polishedPart.hasSuffix(part.delimiter) {
+                    if polishedPart.hasSuffix(".") || polishedPart.hasSuffix("!") || polishedPart.hasSuffix("?") {
+                        polishedPart.removeLast()
+                    }
+                    polishedPart += part.delimiter
+                }
+                rebuilt.append(polishedPart)
+            }
+            return normalizePunctuation(rebuilt.joined(separator: " "))
+        }
+
+        return polishSingleClause(preNormalized, tone: tone)
+    }
+
+    private static func splitSentencesPreservingDelimiters(_ text: String) -> [(sentence: String, delimiter: String)] {
+        let ns = text as NSString
+        let len = ns.length
+        guard len > 0 else { return [] }
+
+        var results: [(String, String)] = []
+        var currentStart = 0
+        var idx = 0
+
+        while idx < len {
+            let ch = ns.character(at: idx)
+            if ch == 0x2E || ch == 0x21 || ch == 0x3F { // . ! ?
+                // Do not split on decimal numbers like 1.0 or 3.14
+                let isDecimal: Bool = {
+                    if ch == 0x2E && idx > 0 && idx + 1 < len {
+                        let prev = ns.character(at: idx - 1)
+                        let next = ns.character(at: idx + 1)
+                        if (prev >= 0x30 && prev <= 0x39) && (next >= 0x30 && next <= 0x39) {
+                            return true
+                        }
+                    }
+                    return false
+                }()
+                if !isDecimal {
+                    let segRange = NSRange(location: currentStart, length: idx - currentStart)
+                    let seg = ns.substring(with: segRange).trimmingCharacters(in: .whitespaces)
+                    let delim = ns.substring(with: NSRange(location: idx, length: 1))
+                    if !seg.isEmpty {
+                        results.append((seg, delim))
+                    }
+                    idx += 1
+                    while idx < len && ns.character(at: idx) == 0x20 {
+                        idx += 1
+                    }
+                    currentStart = idx
+                    continue
+                }
+            }
+            idx += 1
+        }
+
+        if currentStart < len {
+            let tail = ns.substring(from: currentStart).trimmingCharacters(in: .whitespaces)
+            if !tail.isEmpty {
+                results.append((tail, ""))
+            }
+        }
+        return results
+    }
+
+    private static func polishSingleClause(_ clause: String, tone: PolishTone) -> String {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
         let isEnglish = isPrimarilyEnglish(trimmed)
@@ -574,7 +673,21 @@ public struct VietnameseTextPolisher: Sendable {
             ("chua\\s+du\\b", "chưa đủ"),
             ("toàn\\s+bo\\b", "toàn bộ"),
             ("toan\\s+bộ\\b", "toàn bộ"),
-            ("toan\\s+bo\\b", "toàn bộ")
+            ("toan\\s+bo\\b", "toàn bộ"),
+            ("cũng\\s+can\\b", "cũng cần"),
+            ("cung\\s+can\\b", "cũng cần"),
+            ("cần\\s+duoc\\b", "cần được"),
+            ("can\\s+duoc\\b", "cần được"),
+            ("được\\s+sua\\b", "được sửa"),
+            ("duoc\\s+sua\\b", "được sửa"),
+            ("sửa\\s+chinh\\s+ta\\b", "sửa chính tả"),
+            ("sua\\s+chinh\\s+ta\\b", "sửa chính tả"),
+            ("kiểm\\s+tra\\s+ca\\b", "kiểm tra cả"),
+            ("kiem\\s+tra\\s+ca\\b", "kiểm tra cả"),
+            ("cho\\s+english\\b", "cho English"),
+            ("tiếng\\s+english\\b", "tiếng Anh"),
+            ("và\\s+tiếng\\s+việt\\b", "và tiếng Việt"),
+            ("va\\s+tieng\\s+viet\\b", "và tiếng Việt")
         ]
         for (wrong, right) in phraseRepairs {
             joined = joined.replacingOccurrences(of: "(?i)\\b" + wrong + "\\b", with: right, options: .regularExpression)
@@ -764,6 +877,7 @@ public struct VietnameseTextPolisher: Sendable {
         let englishGrammarRules: [(String, String)] = [
             // 3rd-person singular (he / she / it)
             ("(?i)\\b(he|she|it)\\s+don't\\b", "$1 doesn't"),
+            ("(?i)\\b(he|she|it)\\b([^.!?]*?)\\band\\s+(?:don't|dont)\\b", "$1$2and doesn't"),
             ("(?i)\\b(he|she|it)\\s+do\\s+not\\b", "$1 does not"),
             ("(?i)\\b(he|she|it)\\s+have\\b", "$1 has"),
             ("(?i)\\b(he|she|it)\\s+haven't\\b", "$1 hasn't"),

@@ -665,6 +665,24 @@ public struct SuggestionEngine: Sendable {
             }
         }
 
+        // Also count punctuation spacing repairs (" . " -> ". ") and mid-sentence capitalization fixes ("cho english và tiếng việt" -> "Cho English và tiếng Việt")
+        let exactRawWords = trimmed.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let exactPolWords = polished.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        if changedTokenCount < 2 {
+            var caseOrPunctChanges = abs(exactPolWords.count - exactRawWords.count)
+            let exactMin = min(exactRawWords.count, exactPolWords.count)
+            for i in 0..<exactMin {
+                if i == 0 {
+                    if lowercasingFirstChar(exactRawWords[0]) != lowercasingFirstChar(exactPolWords[0]) {
+                        caseOrPunctChanges += 1
+                    }
+                } else if exactRawWords[i] != exactPolWords[i] {
+                    caseOrPunctChanges += 1
+                }
+            }
+            changedTokenCount = max(changedTokenCount, caseOrPunctChanges)
+        }
+
         // Check missing bridge words (dropped word between two words)
         if rawTokens.count >= 2 {
             for i in 0..<(rawTokens.count - 1) {
@@ -678,7 +696,7 @@ public struct SuggestionEngine: Sendable {
         if changedTokenCount >= 2 {
             return .high
         }
-        if changedTokenCount == 1 || polished.lowercased() != normalizedInput.lowercased() {
+        if changedTokenCount == 1 || hasMeaningfulPolishChange(raw: trimmed, polished: polished) {
             return .moderate
         }
         // Single-word check if only 1 word is typed
@@ -688,6 +706,23 @@ public struct SuggestionEngine: Sendable {
             }
         }
         return .normal
+    }
+
+    private static func lowercasingFirstChar(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.lowercased() + text.dropFirst()
+    }
+
+    /// Returns true if `polished` makes a meaningful change to `raw` beyond merely capitalizing the very first character of the text.
+    public static func hasMeaningfulPolishChange(raw: String, polished: String) -> Bool {
+        let cleanRaw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanPol = polished.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanRaw.isEmpty, !cleanPol.isEmpty else { return false }
+        let normalizedRaw = VietnameseTextPolisher.normalizePunctuation(cleanRaw)
+        if cleanPol.lowercased() != normalizedRaw.lowercased() {
+            return true
+        }
+        return lowercasingFirstChar(cleanPol) != lowercasingFirstChar(cleanRaw)
     }
 
     /// Promotes the full-sentence `.aiPolish` suggestion (`✨`) to Slot #1 (`⇥` / `⇥⇥`) when `severity == .high`
@@ -792,11 +827,10 @@ public struct SuggestionEngine: Sendable {
                 ))
             }
 
-            // 1B. Tier 2: Full-Sentence Repair/Polish if the surrounding sentence has multiple words & issues (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
-            let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-            if fullWordsCount >= 2 && fullWordsCount <= 48 {
-                let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
-                if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
+            // 1B. Tier 2: Full-Sentence / Full-Box Repair & Polish (up to 500 words across sentences & paragraphs)
+            let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+            if fullWordsCount >= 2 && fullWordsCount <= 500 {
+                if !polishedFull.isEmpty && hasMeaningfulPolishChange(raw: candidateFullSentence, polished: polishedFull) {
                     add(SuggestionItem(
                         text: polishedFull,
                         kind: .aiPolish,
@@ -922,11 +956,10 @@ public struct SuggestionEngine: Sendable {
                 ))
             }
 
-            // 2C. Tier 2: Full-Sentence Repair/Polish (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
-            let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-            if fullWordsCount >= 2 && fullWordsCount <= 48 {
-                let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
-                if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
+            // 2C. Tier 2: Full-Sentence / Full-Box Repair & Polish (up to 500 words across sentences & paragraphs)
+            let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+            if fullWordsCount >= 2 && fullWordsCount <= 500 {
+                if !polishedFull.isEmpty && hasMeaningfulPolishChange(raw: candidateFullSentence, polished: polishedFull) {
                     add(SuggestionItem(
                         text: polishedFull,
                         kind: .aiPolish,

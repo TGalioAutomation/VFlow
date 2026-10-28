@@ -299,8 +299,8 @@ public actor OnDeviceAIEngine {
     ) async -> OnDeviceAIResult? {
         guard Self.isNeuralPolishEnabled else { return nil }
         let trimmed = rawSentence.trimmingCharacters(in: .whitespacesAndNewlines)
-        let wordCount = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-        guard wordCount >= 2 && wordCount <= 48 else { return nil }
+        let wordCount = trimmed.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
+        guard wordCount >= 2 && wordCount <= 500 else { return nil }
 
         let effectiveTone: PolishTone = {
             switch Self.activeSystemPromptPreset {

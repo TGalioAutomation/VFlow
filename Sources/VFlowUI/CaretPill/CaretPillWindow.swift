@@ -170,8 +170,61 @@ public final class CaretHUDModel: ObservableObject {
     /// Hit-tests a click inside the Caret Pill HUD in local top-left coordinates and invokes the matching action without stealing focus.
     public func dispatchHitTest(at localPoint: CGPoint, windowSize: CGSize) -> Bool {
         let visible = visibleSuggestions
+        let isTwoTierCard = windowSize.height > 66 && visible.count == 1 && visible.first?.kind == .aiPolish
 
-        // 1. Check recorded suggestion chip frames
+        if isTwoTierCard, let first = visible.first {
+            // In 2-Tier Card mode, Tier 1 (top bar: y <= 44) contains VI/EN Mode, Header Badge, Undo, and Tone buttons.
+            // Tier 2 (bottom area: y > 44) is the full-width suggestion card.
+            if localPoint.y <= 44 {
+                if modeButtonFrame.width > 0,
+                   modeButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onToggleInputMethod?()
+                    }
+                    return true
+                }
+                if undoButtonFrame.width > 0,
+                   undoButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onUndo?()
+                    }
+                    return true
+                }
+                if toneButtonFrame.width > 0,
+                   toneButtonFrame.insetBy(dx: -5, dy: -6).contains(localPoint) {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onCycleTone?()
+                    }
+                    return true
+                }
+                // Fallback top-bar regions if frames have not yet populated
+                if localPoint.x >= 60 && localPoint.x <= 108 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onToggleInputMethod?()
+                    }
+                    return true
+                }
+                if localPoint.x >= windowSize.width - 115 && localPoint.x < windowSize.width - 72 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onUndo?()
+                    }
+                    return true
+                }
+                if localPoint.x >= windowSize.width - 72 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onCycleTone?()
+                    }
+                    return true
+                }
+            }
+            // Clicking the Tier 1 header badge or anywhere in Tier 2 selects the full-text suggestion
+            DispatchQueue.main.async { [weak self] in
+                self?.onSelectSuggestion?(first)
+            }
+            return true
+        }
+
+        // 1. Check recorded suggestion chip frames (1-line horizontal pill mode)
         for idx in 0..<visible.count {
             if let rect = chipFrames[idx],
                rect.width > 0,
@@ -317,11 +370,11 @@ public final class CaretHUDModel: ObservableObject {
         scheduleWaveDecay()
 
         CaretPillWindow.shared.present(at: caretFrame)
-        resetAutoHideTimer(seconds: 6.0)
+        resetAutoHideTimer(seconds: fullSentence.count > 56 ? 18.0 : 10.0)
 
         // Stage 2: Asynchronous debounced Apple On-Device FoundationModels Neural Engine LLM inference
         aiInferenceTask?.cancel()
-        let wordCount = fullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+        let wordCount = fullSentence.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count
         guard OnDeviceAIEngine.isFoundationModelAvailable, OnDeviceAIEngine.isNeuralPolishEnabled, wordCount >= 2 else { return }
 
         let capturedTone = self.currentTone
@@ -388,7 +441,7 @@ public final class CaretHUDModel: ObservableObject {
             if updated != self.suggestions {
                 self.suggestions = updated
                 CaretPillWindow.shared.present(at: capturedFrame)
-                self.resetAutoHideTimer(seconds: 7.0)
+                self.resetAutoHideTimer(seconds: capturedSentence.count > 56 ? 18.0 : 12.0)
             }
         }
     }

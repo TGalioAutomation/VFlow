@@ -849,4 +849,76 @@ final class VietnameseEngineTests: XCTestCase {
             )
         )
     }
+
+    @MainActor
+    func testMultiSentencePeriodAndLongParagraph2TierCardSuggestions() async {
+        // 1. User's exact scenario: typing '.' mid-sentence ("Hỗ trợ kiểm tra cả ngữ pháp . cho english và tiếng việt.")
+        // must NOT break or drop the first clause before '.'
+        let userPeriodInput = "Hỗ trợ kiểm tra cả ngữ pháp . cho english và tiếng việt."
+        let polishedPeriod = VietnameseTextPolisher.polish(userPeriodInput)
+        XCTAssertEqual(polishedPeriod, "Hỗ trợ kiểm tra cả ngữ pháp. Cho English và tiếng Việt.")
+
+        let periodSug = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: userPeriodInput.components(separatedBy: " "),
+            fullSentenceText: userPeriodInput,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(periodSug.first?.kind, .aiPolish)
+        XCTAssertEqual(periodSug.first?.text, "Hỗ trợ kiểm tra cả ngữ pháp. Cho English và tiếng Việt.")
+
+        // 2. TypingBuffer preserves words across '.' punctuation and across multi-sentence liveText sync
+        let buf = TypingBuffer()
+        buf.appendWord("Hỗ")
+        buf.appendWord("trợ")
+        buf.appendWord("kiểm")
+        buf.appendWord("tra")
+        buf.appendWord("ngữ")
+        buf.appendWord("pháp")
+        buf.appendPunctuation(".")
+        buf.appendWord("cho")
+        buf.appendWord("english")
+        XCTAssertEqual(buf.currentSentence(), "Hỗ trợ kiểm tra ngữ pháp. cho english")
+
+        buf.syncWithLiveText("Câu đầu tiên đã xong. câu thu hai van duoc giu nguyen", currentComposingWord: "nguyen")
+        XCTAssertEqual(buf.currentSentence(), "Câu đầu tiên đã xong. câu thu hai van duoc giu")
+
+        // 3. Multi-sentence + multi-paragraph (\n) mixed Vietnamese & English full-box polishing
+        let multiParaRaw = "tôi đan gkhoong hiểu sao phần mềm bị loi. he go to school yesterday and dont know a answer.\ndòng thứ hai cung can duoc sua chính tả toan bo"
+        let multiParaPolished = VietnameseTextPolisher.polish(multiParaRaw)
+        XCTAssertTrue(multiParaPolished.contains("Tôi đang không hiểu sao phần mềm bị lỗi."))
+        XCTAssertTrue(multiParaPolished.contains("He went to school yesterday and doesn't know an answer."))
+        XCTAssertTrue(multiParaPolished.contains("\nDòng thứ hai cũng cần được sửa chính tả toàn bộ"))
+
+        // 4. Verify 2-Tier Card diff counter, line estimation, and 2D hit-testing
+        let changedCount = CaretPillView.countChangedWords(raw: userPeriodInput, polished: polishedPeriod)
+        XCTAssertGreaterThanOrEqual(changedCount, 3)
+        XCTAssertGreaterThanOrEqual(CaretPillView.estimatedLineCount(for: multiParaPolished), 3)
+
+        let hud = CaretHUDModel.shared
+        let longItem = SuggestionItem(
+            text: multiParaPolished,
+            kind: .aiPolish,
+            replaceCurrentWord: false,
+            severity: .high
+        )
+        hud.suggestions = [longItem]
+
+        let cardClickExp = expectation(description: "Click on Tier 2 scrollable card area selects full-text suggestion")
+        var selectedFromCard: SuggestionItem?
+        hud.onSelectSuggestion = { item in
+            selectedFromCard = item
+            cardClickExp.fulfill()
+        }
+
+        // Simulate clicking inside Tier 2 (y = 82) of the 2-Tier Card (width: 560, height: 148)
+        let cardHandled = hud.dispatchHitTest(
+            at: CGPoint(x: 240, y: 82),
+            windowSize: CGSize(width: 560, height: 148)
+        )
+        XCTAssertTrue(cardHandled)
+        await fulfillment(of: [cardClickExp], timeout: 1.0)
+        XCTAssertEqual(selectedFromCard?.text, multiParaPolished)
+    }
 }

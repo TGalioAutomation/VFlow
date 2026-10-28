@@ -6,7 +6,7 @@ public final class TypingBuffer: @unchecked Sendable {
 
     private var words: [String] = []
     private var undoHistory: [String] = []
-    private let maxWords = 50
+    private let maxWords = 500
     private let lock = NSLock()
 
     public init() {}
@@ -22,10 +22,17 @@ public final class TypingBuffer: @unchecked Sendable {
         if words.count > maxWords {
             words.removeFirst()
         }
+    }
 
-        // If word ends with sentence terminators, clear after recording for sentence isolation
-        if clean.hasSuffix(".") || clean.hasSuffix("?") || clean.hasSuffix("!") {
-            // keep last sentence words available for immediate polish
+    /// Attaches a punctuation character (e.g. `.`, `,`, `!`, `?`, `;`, `:`) to the last completed word in the buffer
+    /// so sentences separated by `.` are preserved without breaking or losing context.
+    public func appendPunctuation(_ punct: Character) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !words.isEmpty else { return }
+        let last = words[words.count - 1]
+        if !last.hasSuffix(String(punct)) {
+            words[words.count - 1] = last + String(punct)
         }
     }
 
@@ -69,7 +76,7 @@ public final class TypingBuffer: @unchecked Sendable {
     }
 
     /// Synchronizes the typing buffer with the actual live text from the focused UI element,
-    /// eliminating any stale words from deleted or modified text.
+    /// preserving the entire input box across sentences (`.`, `!`, `?`) and paragraphs (`\n`) up to `maxWords`.
     public func syncWithLiveText(_ liveText: String, currentComposingWord: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -80,10 +87,9 @@ public final class TypingBuffer: @unchecked Sendable {
             return
         }
 
-        // Take the last sentence/clause in the input box
-        let clauses = trimmed.components(separatedBy: CharacterSet(charactersIn: "\n.!?;"))
-        let lastClause = (clauses.last ?? trimmed).trimmingCharacters(in: .whitespacesAndNewlines)
-        var tokens = lastClause.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        var tokens = trimmed
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
 
         // If user is currently composing the last word (no trailing space), drop the in-progress token from completed words
         let cleanComposing = currentComposingWord.trimmingCharacters(in: .whitespacesAndNewlines)

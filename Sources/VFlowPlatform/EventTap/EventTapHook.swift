@@ -107,7 +107,22 @@ public final class EventTapHook: @unchecked Sendable {
         if let hasActive = hasActiveSuggestions {
             return hasActive()
         }
-        return isWithinTypingActivityWindow(seconds: 8.0)
+        return isWithinTypingActivityWindow(seconds: 3600.0)
+    }
+
+    private func recordCompletedBoundary(char: Character, currentWord: String) {
+        let punctuationSet: Set<Character> = [".", ",", "!", "?", ";", ":"]
+        if char == " " {
+            TypingBuffer.shared.appendWord(currentWord)
+            clearMouseReset()
+        } else if punctuationSet.contains(char) {
+            if !currentWord.isEmpty {
+                TypingBuffer.shared.appendWord(currentWord + String(char))
+            } else {
+                TypingBuffer.shared.appendPunctuation(char)
+            }
+            clearMouseReset()
+        }
     }
 
     public func cancelPendingDoubleTab(flushSingleTab: Bool = false) {
@@ -432,7 +447,7 @@ public final class EventTapHook: @unchecked Sendable {
                 recordMouseReset(word: engine.formattedWord)
             }
             engine.reset()
-            if isWithinTypingActivityWindow(seconds: 12.0) {
+            if isWithinTypingActivityWindow(seconds: 3600.0) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
                     self?.notifyTypingState()
                 }
@@ -565,11 +580,30 @@ public final class EventTapHook: @unchecked Sendable {
         }
 
         // Check Return / Escape
-        if keycode == KeyCodeMap.kVK_Return || keycode == KeyCodeMap.kVK_Escape {
+        if keycode == KeyCodeMap.kVK_Escape {
             engine.reset()
             clearMouseReset()
-            TypingBuffer.shared.clear()
             onDismissHUD?()
+            setLastPhysicalKey(keycode)
+            return Unmanaged.passUnretained(event)
+        }
+
+        if keycode == KeyCodeMap.kVK_Return {
+            let pendingWord = engine.formattedWord
+            engine.reset()
+            clearMouseReset()
+            if !pendingWord.isEmpty {
+                TypingBuffer.shared.appendWord(pendingWord)
+            }
+            if !flags.contains(.maskShift) {
+                onDismissHUD?()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                    if let val = AccessibilityBridge.shared.readFocusedTextValue(),
+                       val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        TypingBuffer.shared.clear()
+                    }
+                }
+            }
             setLastPhysicalKey(keycode)
             return Unmanaged.passUnretained(event)
         }
@@ -593,10 +627,7 @@ public final class EventTapHook: @unchecked Sendable {
             if !result.replacementText.isEmpty {
                 postUnicodeString(result.replacementText, avoidingKeyCode: keycode, proxy: proxy)
             }
-            if char == " " {
-                TypingBuffer.shared.appendWord(result.currentWord)
-                clearMouseReset()
-            }
+            recordCompletedBoundary(char: char, currentWord: result.currentWord)
             setLastPhysicalKey(keycode)
             notifyTypingState()
             return nil // Swallow original raw keystroke
@@ -606,17 +637,13 @@ public final class EventTapHook: @unchecked Sendable {
                 postBackspaces(result.backspaceCount, proxy: proxy)
             }
             postUnicodeString(result.replacementText, avoidingKeyCode: keycode, proxy: proxy)
-            TypingBuffer.shared.appendWord(result.currentWord)
-            clearMouseReset()
+            recordCompletedBoundary(char: char, currentWord: result.currentWord)
             setLastPhysicalKey(keycode)
             notifyTypingState()
             return nil
         }
 
-        if char == " " {
-            TypingBuffer.shared.appendWord(result.currentWord)
-            clearMouseReset()
-        }
+        recordCompletedBoundary(char: char, currentWord: result.currentWord)
 
         setLastPhysicalKey(keycode)
         notifyTypingState()
@@ -642,11 +669,8 @@ public final class EventTapHook: @unchecked Sendable {
         var wordAfterCursor = ""
 
         if let ctx = AccessibilityBridge.shared.readFocusedTextContext() {
-            let (cStart, cEnd) = Self.findClauseBounds(in: ctx.fullText, cursorLocation: ctx.cursorLocation)
-            let ns = ctx.fullText as NSString
-            let safeStart = max(0, min(ns.length, cStart))
-            let safeLen = max(0, min(ns.length - safeStart, cEnd - safeStart))
-            fullSentenceText = ns.substring(with: NSRange(location: safeStart, length: safeLen))
+            // Preserve the ENTIRE input box text (including multiple sentences separated by '.' and multi-line '\n' paragraphs)
+            fullSentenceText = ctx.fullText.trimmingCharacters(in: .whitespacesAndNewlines)
             wordAfterCursor = ctx.wordAfterCursor
             // Cursor Word Sync: if user is editing inside an existing word (e.g. "duoc|"),
             // ctx.wordAtCursor has the full word ("duoc") even if engine only saw the last keystroke ("c")!
@@ -671,6 +695,7 @@ public final class EventTapHook: @unchecked Sendable {
         }
 
         let words = TypingBuffer.shared.recentWords()
+        fullSentenceText = (words + (currentWord.isEmpty ? [] : [currentWord])).joined(separator: " ")
         let method = engine.inputMethod
         onTypingStateChanged?(currentWord, rawWord, words, method, fullSentenceText, wordAfterCursor)
     }
@@ -702,51 +727,44 @@ public final class EventTapHook: @unchecked Sendable {
             return ""
         }()
 
-        // Case 1: Full sentence polish (✨) — bounded to the active clause to prevent document wiping
+        // Case 1: Full input box / multi-sentence polish (✨) — replaces via smart tail delta or instant AX write
         if item.kind == .aiPolish {
             if let ctx = ctx, !ctx.fullText.isEmpty {
                 TypingBuffer.shared.recordForUndo(ctx.fullText)
                 let nsFull = ctx.fullText as NSString
                 let safeCursor = max(0, min(nsFull.length, ctx.cursorLocation))
-                let (clauseStart, clauseEnd) = Self.findClauseBounds(in: ctx.fullText, cursorLocation: safeCursor)
+                let leftSub = nsFull.substring(to: safeCursor)
+                let rightSub = nsFull.substring(from: safeCursor)
+                let rightTrimmed = rightSub.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                let safeStart = max(0, min(safeCursor, clauseStart))
-                let leftLen = max(0, safeCursor - safeStart)
-                let rightLen = max(0, min(nsFull.length - safeCursor, clauseEnd - safeCursor))
+                let targetInserted = item.text + (item.text.hasSuffix(" ") ? "" : " ")
 
-                let leftSub = nsFull.substring(with: NSRange(location: safeStart, length: leftLen))
-                let rightSub = nsFull.substring(with: NSRange(location: safeCursor, length: rightLen))
-                let leftCharsCount = leftSub.count
-                let rightCharsCount = rightSub.count
-
-                let hasSpaceOrPunctuationAfter: Bool = {
-                    if clauseEnd < nsFull.length {
-                        let afterChar = nsFull.character(at: clauseEnd)
-                        if afterChar == 0x20 || afterChar == 0x0A || afterChar == 0x0D ||
-                           afterChar == 0x2E || afterChar == 0x21 || afterChar == 0x3F || afterChar == 0x2C {
-                            return true
+                if rightTrimmed.isEmpty {
+                    let rightTrailingSpacesCount = rightSub.count
+                    if rightTrailingSpacesCount > 0 {
+                        postForwardDeletes(rightTrailingSpacesCount)
+                    }
+                    let delta = VietnameseInputEngine.minimalDelta(from: leftSub, to: targetInserted)
+                    if delta.backspaces > 80 && AccessibilityBridge.shared.writeFocusedFullText(targetInserted) {
+                        // Instant full-box replacement succeeded via Accessibility
+                    } else {
+                        if delta.backspaces > 0 {
+                            postBackspaces(delta.backspaces)
+                        }
+                        if !delta.replacement.isEmpty {
+                            postUnicodeString(delta.replacement)
                         }
                     }
-                    return false
-                }()
-                let targetInserted = item.text + (hasSpaceOrPunctuationAfter ? "" : " ")
-
-                if rightCharsCount == 0 {
-                    let delta = VietnameseInputEngine.minimalDelta(from: leftSub, to: targetInserted)
-                    if delta.backspaces > 0 {
-                        postBackspaces(delta.backspaces)
-                    }
-                    if !delta.replacement.isEmpty {
-                        postUnicodeString(delta.replacement)
-                    }
                 } else {
-                    if leftCharsCount > 0 {
-                        postBackspaces(leftCharsCount)
+                    if !AccessibilityBridge.shared.writeFocusedFullText(targetInserted) {
+                        if leftSub.count > 0 {
+                            postBackspaces(leftSub.count)
+                        }
+                        if rightSub.count > 0 {
+                            postForwardDeletes(rightSub.count)
+                        }
+                        postUnicodeString(targetInserted)
                     }
-                    if rightCharsCount > 0 {
-                        postForwardDeletes(rightCharsCount)
-                    }
-                    postUnicodeString(targetInserted)
                 }
             } else {
                 let currentSentence = TypingBuffer.shared.currentSentence()
