@@ -718,4 +718,75 @@ final class VietnameseEngineTests: XCTestCase {
         XCTAssertTrue(opt2Consumed)
         XCTAssertEqual(selectedShortcutIndex, 1)
     }
+
+    @MainActor
+    func testLongSentenceShiftedSpaceAndFullSentencePolish() {
+        // 1. Exact sentence from user's screenshot: "tính ra nó đan gkhoong bị loi nua y ma no chang ra sao"
+        let rawScreenshotSentence = "tính ra nó đan gkhoong bị loi nua y ma no chang ra sao"
+        let polished = VietnameseTextPolisher.polish(rawScreenshotSentence)
+        XCTAssertEqual(
+            polished.lowercased(),
+            "tính ra nó đang không bị lỗi nữa ý mà nó chẳng ra sao"
+        )
+
+        // Verify SuggestionEngine places full-sentence .aiPolish at Slot #1 (#0) with .high severity
+        // both while composing the last word and after pressing Space (currentWord == "")
+        let sentenceWords = ["tính", "ra", "nó", "đan", "gkhoong", "bị", "loi", "nua", "y", "ma", "no", "chang", "ra", "sao"]
+        let afterSpaceSuggestions = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: sentenceWords,
+            fullSentenceText: rawScreenshotSentence,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(afterSpaceSuggestions.first?.kind, .aiPolish)
+        XCTAssertEqual(afterSpaceSuggestions.first?.severity, .high)
+        XCTAssertEqual(
+            afterSpaceSuggestions.first?.text.lowercased(),
+            "tính ra nó đang không bị lỗi nữa ý mà nó chẳng ra sao"
+        )
+
+        // Verify OnDeviceAIEngine.isValidRefinement accepts LLM candidate when shifted-space "đan gkhoong" -> "đang không"
+        XCTAssertTrue(
+            OnDeviceAIEngine.isValidRefinement(
+                base: rawScreenshotSentence,
+                candidate: "Tính ra nó đang không bị lỗi nữa ý mà nó chẳng ra sao"
+            )
+        )
+
+        // 2. Verify sentences longer than 16 words (up to 48 words) still produce full-sentence .aiPolish suggestions
+        let long22WordRaw = "tôi gõ ca 1 cau kha dai nhung lai khong du phần suggest cho toan bộ giao dien cua he thong phan mem"
+        let longWords = long22WordRaw.components(separatedBy: " ")
+        XCTAssertGreaterThan(longWords.count, 16)
+        let longSuggestions = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: longWords,
+            fullSentenceText: long22WordRaw,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(longSuggestions.first?.kind, .aiPolish)
+        XCTAssertEqual(
+            longSuggestions.first?.text.lowercased(),
+            "tôi gõ cả 1 câu khá dài nhưng lại không đủ phần suggest cho toàn bộ giao diện của hệ thống phần mềm"
+        )
+
+        // Verify CaretHUDModel.visibleSuggestions dedicates full width to a single chip when .aiPolish > 26 chars
+        let hud = CaretHUDModel.shared
+        hud.suggestions = longSuggestions
+        XCTAssertEqual(hud.visibleSuggestions.count, 1)
+        XCTAssertEqual(hud.visibleSuggestions.first?.kind, .aiPolish)
+
+        // 3. Verify TypingBuffer.popLastWord() trims 1 character at a time instead of dropping a whole word per Backspace
+        let buf = TypingBuffer()
+        buf.appendWord("chẳng")
+        buf.appendWord("ra")
+        buf.appendWord("sao")
+        buf.popLastWord()
+        XCTAssertEqual(buf.currentSentence(), "chẳng ra sa")
+        buf.popLastWord()
+        XCTAssertEqual(buf.currentSentence(), "chẳng ra s")
+        buf.popLastWord()
+        XCTAssertEqual(buf.currentSentence(), "chẳng ra")
+    }
 }

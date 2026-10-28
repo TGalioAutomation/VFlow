@@ -155,7 +155,8 @@ public struct CaretPillView: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.trailing, 10)
         }
-        .frame(height: 40)
+        .frame(minHeight: 40)
+        .padding(.vertical, visibleSuggestions.first.map { $0.kind == .aiPolish && $0.text.count > 68 } == true ? 4 : 0)
         .fixedSize(horizontal: true, vertical: true)
         .background(
             // Deep Obsidian (#0D1324) 96% + Rounded UltraThin blur (no rectangular corner bleed)
@@ -186,6 +187,9 @@ public struct CaretPillView: View {
 
     private var visibleSuggestions: [SuggestionItem] {
         guard !suggestions.isEmpty else { return [] }
+        if let first = suggestions.first, first.kind == .aiPolish, first.text.count > 26 {
+            return [first]
+        }
         let hasLongPolish = suggestions.prefix(2).contains { $0.kind == .aiPolish && $0.text.count > 12 }
         if hasLongPolish {
             return Array(suggestions.prefix(2))
@@ -236,11 +240,21 @@ public struct CaretPillView: View {
                         .font(.system(size: 10))
                 }
 
-                Text(item.text)
-                    .font(.system(size: 12.5, weight: isHighlight ? .semibold : .regular))
-                    .foregroundColor(Color(red: 241/255, green: 245/255, blue: 249/255))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                if item.kind == .aiPolish && item.text.count > 68 {
+                    Text(item.text)
+                        .font(.system(size: 12.5, weight: isHighlight ? .semibold : .regular))
+                        .foregroundColor(Color(red: 241/255, green: 245/255, blue: 249/255))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: 640, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(item.text)
+                        .font(.system(size: 12.5, weight: isHighlight ? .semibold : .regular))
+                        .foregroundColor(Color(red: 241/255, green: 245/255, blue: 249/255))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -249,9 +263,9 @@ public struct CaretPillView: View {
                     ? chipColor.opacity(chipSeverity == .high ? 0.28 : 0.22)
                     : Color.white.opacity(0.07)
             )
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                Capsule()
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
                         isHighlight
                             ? chipColor.opacity(chipSeverity == .high ? 0.65 : 0.45)
@@ -259,7 +273,7 @@ public struct CaretPillView: View {
                         lineWidth: (chipSeverity == .high || isDoubleTabArmed) && index == 0 ? 1.2 : 0.5
                     )
             )
-            .contentShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .background(

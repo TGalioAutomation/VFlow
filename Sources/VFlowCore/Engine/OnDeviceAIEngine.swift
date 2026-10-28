@@ -162,9 +162,9 @@ public actor OnDeviceAIEngine {
 
     private static let baseSystemGuardrails = """
     You are an expert Vietnamese and English keyboard input & typo corrector.
-    1. Restore missing Vietnamese tone marks and diacritics on unsigned words (e.g. "toi dang thu go tieng viet khong dau" -> "Tôi đang thử gõ tiếng Việt không dấu").
-    2. Fix character-level Vietnamese typing and spelling errors according to sentence meaning and context (e.g. "to đang thu go tieng viet không cau" -> "Tôi đang thử gõ tiếng Việt không dấu", "thaat sư không tốt lắm" -> "thật sự không tốt lắm").
-    3. Insert at most one missing bridge word if the Vietnamese grammar requires it.
+    1. Restore missing Vietnamese tone marks and diacritics on unsigned words across the ENTIRE sentence from start to finish (e.g. "toi dang thu go tieng viet khong dau" -> "Tôi đang thử gõ tiếng Việt không dấu").
+    2. Fix character-level Vietnamese typing, shifted-space typos, and spelling errors according to sentence meaning and context (e.g. "đan gkhoong" -> "đang không", "to đang thu go tieng viet không cau" -> "Tôi đang thử gõ tiếng Việt không dấu", "tính ra nó đan gkhoong bị loi nua y ma no chang ra sao" -> "Tính ra nó đang không bị lỗi nữa ý mà nó chẳng ra sao").
+    3. Always return the FULL corrected sentence in `polishedSentence` without truncating or dropping clauses.
     4. Never expand "go" into "Google" (in Vietnamese "go" is "gõ"). Preserve word order and keep English technical terms (text, suggest, value, model, AI, app, code, bug, user, UI) in English.
     """
 
@@ -300,7 +300,7 @@ public actor OnDeviceAIEngine {
         guard Self.isNeuralPolishEnabled else { return nil }
         let trimmed = rawSentence.trimmingCharacters(in: .whitespacesAndNewlines)
         let wordCount = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-        guard wordCount >= 2 && wordCount <= 16 else { return nil }
+        guard wordCount >= 2 && wordCount <= 48 else { return nil }
 
         let effectiveTone: PolishTone = {
             switch Self.activeSystemPromptPreset {
@@ -577,8 +577,8 @@ public actor OnDeviceAIEngine {
         let effectiveBaseTokens = cleanBaseTokens.isEmpty ? baseTokens : cleanBaseTokens
 
         guard !candTokens.isEmpty,
-              candTokens.count >= effectiveBaseTokens.count,
-              candTokens.count <= baseTokens.count + 2 else {
+              candTokens.count >= max(1, effectiveBaseTokens.count - 2),
+              candTokens.count <= baseTokens.count + 3 else {
             return false
         }
 
@@ -604,13 +604,22 @@ public actor OnDeviceAIEngine {
             return false
         }
 
-        // Any already-accented Vietnamese word in base must retain its exact token or exact stripped root in candidate
-        // (Do NOT allow 1-character edit distance substitutions to corrupt accented words like "câu" -> "dấu"!)
+        // Any already-accented Vietnamese word in base must retain its exact token, exact stripped root,
+        // or a same-initial-letter 1-character prefix/suffix repair (e.g. "đan" -> "đang", "tô" -> "tôi")
+        // while strictly blocking initial-consonant substitutions (like "câu" -> "dấu").
         for bTok in effectiveBaseTokens {
             let hasDiacritics = bTok.unicodeScalars.contains { $0.value > 127 }
             if hasDiacritics {
                 let bRoot = SuggestionEngine.stripDiacritics(bTok)
-                let preserved = candTokens.contains(bTok) || candStripped.contains(bRoot)
+                let preserved = candTokens.contains(bTok) || candStripped.contains { cRoot in
+                    if cRoot == bRoot { return true }
+                    guard let bFirst = bRoot.first, let cFirst = cRoot.first, bFirst == cFirst else {
+                        return false
+                    }
+                    return SuggestionEngine.asciiEditDistance(bRoot, cRoot) <= 1 ||
+                           cRoot.hasPrefix(bRoot) ||
+                           bRoot.hasPrefix(cRoot)
+                }
                 if !preserved {
                     return false
                 }

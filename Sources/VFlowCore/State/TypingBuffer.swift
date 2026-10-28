@@ -43,11 +43,16 @@ public final class TypingBuffer: @unchecked Sendable {
         return words
     }
 
-    /// Removes the last word when user presses Backspace across a word boundary.
+    /// Removes 1 character from the last completed word (or drops the word when empty) when user presses Backspace across a word boundary.
     public func popLastWord() {
         lock.lock()
         defer { lock.unlock() }
-        _ = words.popLast()
+        guard let last = words.last else { return }
+        if last.count <= 1 {
+            _ = words.popLast()
+        } else {
+            words[words.count - 1] = String(last.dropLast())
+        }
     }
 
     /// Replaces the last completed word in the buffer.

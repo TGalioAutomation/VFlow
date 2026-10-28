@@ -141,6 +141,9 @@ public final class CaretHUDModel: ObservableObject {
 
     public var visibleSuggestions: [SuggestionItem] {
         guard !suggestions.isEmpty else { return [] }
+        if let first = suggestions.first, first.kind == .aiPolish, first.text.count > 26 {
+            return [first]
+        }
         let hasLongPolish = suggestions.prefix(2).contains { $0.kind == .aiPolish && $0.text.count > 12 }
         if hasLongPolish {
             return Array(suggestions.prefix(2))

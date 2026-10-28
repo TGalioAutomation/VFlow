@@ -724,13 +724,6 @@ public final class EventTapHook: @unchecked Sendable {
                 let leftCharsCount = leftSub.count
                 let rightCharsCount = rightSub.count
 
-                if leftCharsCount > 0 {
-                    postBackspaces(leftCharsCount)
-                }
-                if rightCharsCount > 0 {
-                    postForwardDeletes(rightCharsCount)
-                }
-
                 let hasSpaceOrPunctuationAfter: Bool = {
                     if clauseEnd < nsFull.length {
                         let afterChar = nsFull.character(at: clauseEnd)
@@ -741,15 +734,38 @@ public final class EventTapHook: @unchecked Sendable {
                     }
                     return false
                 }()
-                postUnicodeString(item.text + (hasSpaceOrPunctuationAfter ? "" : " "))
+                let targetInserted = item.text + (hasSpaceOrPunctuationAfter ? "" : " ")
+
+                if rightCharsCount == 0 {
+                    let delta = VietnameseInputEngine.minimalDelta(from: leftSub, to: targetInserted)
+                    if delta.backspaces > 0 {
+                        postBackspaces(delta.backspaces)
+                    }
+                    if !delta.replacement.isEmpty {
+                        postUnicodeString(delta.replacement)
+                    }
+                } else {
+                    if leftCharsCount > 0 {
+                        postBackspaces(leftCharsCount)
+                    }
+                    if rightCharsCount > 0 {
+                        postForwardDeletes(rightCharsCount)
+                    }
+                    postUnicodeString(targetInserted)
+                }
             } else {
                 let currentSentence = TypingBuffer.shared.currentSentence()
                 let fullDisplayed = activeWord.isEmpty ? currentSentence : (currentSentence.isEmpty ? activeWord : "\(currentSentence) \(activeWord)")
                 if !fullDisplayed.isEmpty {
                     TypingBuffer.shared.recordForUndo(fullDisplayed)
-                    let bsCount = fullDisplayed.count + (activeWord.isEmpty ? 1 : 0)
-                    postBackspaces(bsCount)
-                    postUnicodeString(item.text + " ")
+                    let displayedWithTrailing = fullDisplayed + (activeWord.isEmpty ? " " : "")
+                    let delta = VietnameseInputEngine.minimalDelta(from: displayedWithTrailing, to: item.text + " ")
+                    if delta.backspaces > 0 {
+                        postBackspaces(delta.backspaces)
+                    }
+                    if !delta.replacement.isEmpty {
+                        postUnicodeString(delta.replacement)
+                    }
                 } else {
                     postUnicodeString(item.text + " ")
                 }
@@ -998,7 +1014,7 @@ public final class EventTapHook: @unchecked Sendable {
     public func postBackspaces(_ count: Int, proxy: CGEventTapProxy? = nil) {
         guard count > 0 else { return }
         let src = privateEventSource ?? CGEventSource(stateID: .privateState)
-        for _ in 0..<count {
+        for idx in 0..<count {
             guard let down = CGEvent(keyboardEventSource: src, virtualKey: KeyCodeMap.kVK_Delete, keyDown: true),
                   let up = CGEvent(keyboardEventSource: src, virtualKey: KeyCodeMap.kVK_Delete, keyDown: false) else {
                 continue
@@ -1014,7 +1030,13 @@ public final class EventTapHook: @unchecked Sendable {
             } else {
                 down.post(tap: .cgSessionEventTap)
                 up.post(tap: .cgSessionEventTap)
+                if count > 12 && (idx + 1) % 10 == 0 {
+                    usleep(450)
+                }
             }
+        }
+        if proxy == nil && count > 10 {
+            usleep(900)
         }
     }
 
@@ -1028,6 +1050,9 @@ public final class EventTapHook: @unchecked Sendable {
         let chunkSize = 20
 
         for start in stride(from: 0, to: utf16Chars.count, by: chunkSize) {
+            if start > 0 && proxy == nil {
+                usleep(850)
+            }
             let end = min(start + chunkSize, utf16Chars.count)
             let chunk = Array(utf16Chars[start..<end])
 

@@ -173,11 +173,66 @@ public struct VietnameseTextPolisher: Sendable {
         "nhieu": "nhiều",
         "luon": "luôn",
         "moi": "mới",
+        "loi": "lỗi",
+        "nua": "nữa",
+        "chang": "chẳng",
+        "chac": "chắc",
+        "hoac": "hoặc",
+        "deu": "đều",
+        "vua": "vừa",
+        "rat": "rất",
+        "kha": "khá",
+        "minh": "mình",
+        "chung": "chúng",
+        "nhat": "nhất",
+        "thoi": "thôi",
+        "roi": "rồi",
+        "vay": "vậy",
+        "nay": "này",
+        "giua": "giữa",
+        "duoi": "dưới",
+        "tren": "trên",
+        "ngoai": "ngoài",
+        "cua": "của",
+        "voi": "với",
+        "boi": "bởi",
         "texxt": "text",
         "tetx": "text",
         "sugget": "suggest",
         "sugest": "suggest"
     ]
+
+    /// Rejoins shifted-space consonant endings (-ng, -nh, -ch) where Space was pressed 1 character early
+    /// (e.g. "đan gkhoong" -> ["đang", "khoong"], "nhưn gkhông" -> ["nhưng", "không"]).
+    private static func rejoinShiftedSpaceConsonants(_ rawTokens: [String]) -> [String] {
+        guard rawTokens.count >= 2 else { return rawTokens }
+        var tokens = rawTokens
+        let gFollowConsonants: Set<Character> = ["b", "c", "d", "đ", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "x"]
+        let hFollowConsonants: Set<Character> = ["b", "c", "d", "đ", "g", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "x"]
+
+        for idx in 0..<(tokens.count - 1) {
+            let cur = tokens[idx]
+            let next = tokens[idx + 1]
+            guard cur.count >= 2, next.count >= 3 else { continue }
+
+            let curLower = cur.lowercased()
+            let nextLower = next.lowercased()
+            guard !SmartEnglishDetector.isEnglishWord(nextLower) else { continue }
+
+            let nextChars = Array(nextLower)
+            let firstNext = nextChars[0]
+            let secondNext = nextChars[1]
+
+            if curLower.hasSuffix("n") && firstNext == "g" && gFollowConsonants.contains(secondNext) {
+                tokens[idx] = cur + String(next.first!)
+                tokens[idx + 1] = String(next.dropFirst())
+            } else if (curLower.hasSuffix("n") || curLower.hasSuffix("c")) && firstNext == "h" && hFollowConsonants.contains(secondNext) {
+                tokens[idx] = cur + String(next.first!)
+                tokens[idx + 1] = String(next.dropFirst())
+            }
+        }
+        return tokens
+    }
 
     /// Collapses accidental duplicate vowels in a typo token (e.g. "thaat" -> "that", "khoong" -> "khong").
     private static func collapseAccidentalDoubleVowels(_ word: String) -> String {
@@ -194,7 +249,7 @@ public struct VietnameseTextPolisher: Sendable {
 
     /// Expands teencode, shorthand tokens, and repairs raw/malformed Telex words.
     public static func expandTeencode(_ text: String) -> String {
-        let tokens = text.components(separatedBy: " ")
+        let tokens = rejoinShiftedSpaceConsonants(text.components(separatedBy: " "))
         var expanded: [String] = []
         let telexEngine = VietnameseInputEngine(inputMethod: .telex, tonePlacement: .modern, autoEnglishRestore: true)
 
@@ -384,7 +439,105 @@ public struct VietnameseTextPolisher: Sendable {
             ("phải\\s+nhu\\b", "phải như"),
             ("phai\\s+nhu\\b", "phải như"),
             ("the\\s+nao\\b", "thế nào"),
-            ("thế\\s+nao\\b", "thế nào")
+            ("thế\\s+nao\\b", "thế nào"),
+            ("tinh\\s+ra\\b", "tính ra"),
+            ("tính\\s+ra\\s+no\\b", "tính ra nó"),
+            ("tinh\\s+ra\\s+no\\b", "tính ra nó"),
+            ("bị\\s+loi\\b", "bị lỗi"),
+            ("bi\\s+loi\\b", "bị lỗi"),
+            ("bi\\s+lỗi\\b", "bị lỗi"),
+            ("không\\s+bi\\b", "không bị"),
+            ("khong\\s+bi\\b", "không bị"),
+            ("đang\\s+bi\\b", "đang bị"),
+            ("dang\\s+bi\\b", "đang bị"),
+            ("vẫn\\s+bi\\b", "vẫn bị"),
+            ("van\\s+bi\\b", "vẫn bị"),
+            ("van\\s+bị\\b", "vẫn bị"),
+            ("lại\\s+bi\\b", "lại bị"),
+            ("lai\\s+bi\\b", "lại bị"),
+            ("lai\\s+bị\\b", "lại bị"),
+            ("nữa\\s+y\\s+ma\\b", "nữa ý mà"),
+            ("nua\\s+y\\s+ma\\b", "nữa ý mà"),
+            ("nữa\\s+y\\b", "nữa ý"),
+            ("nua\\s+y\\b", "nữa ý"),
+            ("y\\s+ma\\b", "ý mà"),
+            ("ý\\s+ma\\b", "ý mà"),
+            ("nữa\\s+ma\\b", "nữa mà"),
+            ("nua\\s+ma\\b", "nữa mà"),
+            ("nhưng\\s+ma\\b", "nhưng mà"),
+            ("nhung\\s+ma\\b", "nhưng mà"),
+            ("thế\\s+ma\\b", "thế mà"),
+            ("the\\s+ma\\b", "thế mà"),
+            ("vậy\\s+ma\\b", "vậy mà"),
+            ("vay\\s+ma\\b", "vậy mà"),
+            ("mà\\s+no\\b", "mà nó"),
+            ("ma\\s+no\\b", "mà nó"),
+            ("ma\\s+nó\\b", "mà nó"),
+            ("vì\\s+no\\b", "vì nó"),
+            ("vi\\s+no\\b", "vì nó"),
+            ("nếu\\s+no\\b", "nếu nó"),
+            ("neu\\s+no\\b", "nếu nó"),
+            ("thì\\s+no\\b", "thì nó"),
+            ("thi\\s+no\\b", "thì nó"),
+            ("cho\\s+no\\b", "cho nó"),
+            ("của\\s+no\\b", "của nó"),
+            ("cua\\s+no\\b", "của nó"),
+            ("thấy\\s+no\\b", "thấy nó"),
+            ("thay\\s+no\\b", "thấy nó"),
+            ("no\\s+đang\\b", "nó đang"),
+            ("no\\s+dang\\b", "nó đang"),
+            ("no\\s+không\\b", "nó không"),
+            ("no\\s+khong\\b", "nó không"),
+            ("no\\s+chẳng\\b", "nó chẳng"),
+            ("no\\s+chang\\b", "nó chẳng"),
+            ("no\\s+bị\\b", "nó bị"),
+            ("no\\s+bi\\b", "nó bị"),
+            ("no\\s+lại\\b", "nó lại"),
+            ("no\\s+lai\\b", "nó lại"),
+            ("no\\s+vẫn\\b", "nó vẫn"),
+            ("no\\s+van\\b", "nó vẫn"),
+            ("no\\s+cũng\\b", "nó cũng"),
+            ("no\\s+cung\\b", "nó cũng"),
+            ("chang\\s+ra\\s+sao", "chẳng ra sao"),
+            ("chẳng\\s+ra\\s+sao", "chẳng ra sao"),
+            ("chăng\\s+ra\\s+sao", "chẳng ra sao"),
+            ("không\\s+ra\\s+sao", "không ra sao"),
+            ("khong\\s+ra\\s+sao", "không ra sao"),
+            ("gõ\\s+ca\\b", "gõ cả"),
+            ("go\\s+ca\\b", "gõ cả"),
+            ("tất\\s+ca\\b", "tất cả"),
+            ("tat\\s+ca\\b", "tất cả"),
+            ("ca\\s+1\\s+cau\\b", "cả 1 câu"),
+            ("cả\\s+1\\s+cau\\b", "cả 1 câu"),
+            ("ca\\s+1\\s+câu\\b", "cả 1 câu"),
+            ("1\\s+cau\\b", "1 câu"),
+            ("một\\s+cau\\b", "một câu"),
+            ("mot\\s+cau\\b", "một câu"),
+            ("khá\\s+dai\\b", "khá dài"),
+            ("kha\\s+dai\\b", "khá dài"),
+            ("kha\\s+dài\\b", "khá dài"),
+            ("câu\\s+dai\\b", "câu dài"),
+            ("cau\\s+dai\\b", "câu dài"),
+            ("rất\\s+dai\\b", "rất dài"),
+            ("rat\\s+dai\\b", "rất dài"),
+            ("quá\\s+dai\\b", "quá dài"),
+            ("qua\\s+dai\\b", "quá dài"),
+            ("suggest\\s+lai\\b", "suggest lại"),
+            ("nhưng\\s+lai\\b", "nhưng lại"),
+            ("nhung\\s+lai\\b", "nhưng lại"),
+            ("mà\\s+lai\\b", "mà lại"),
+            ("ma\\s+lai\\b", "mà lại"),
+            ("sao\\s+lai\\b", "sao lại"),
+            ("lai\\s+không\\b", "lại không"),
+            ("lai\\s+khong\\b", "lại không"),
+            ("lại\\s+khong\\b", "lại không"),
+            ("không\\s+du\\b", "không đủ"),
+            ("khong\\s+du\\b", "không đủ"),
+            ("chưa\\s+du\\b", "chưa đủ"),
+            ("chua\\s+du\\b", "chưa đủ"),
+            ("toàn\\s+bo\\b", "toàn bộ"),
+            ("toan\\s+bộ\\b", "toàn bộ"),
+            ("toan\\s+bo\\b", "toàn bộ")
         ]
         for (wrong, right) in phraseRepairs {
             joined = joined.replacingOccurrences(of: "(?i)\\b" + wrong + "\\b", with: right, options: .regularExpression)

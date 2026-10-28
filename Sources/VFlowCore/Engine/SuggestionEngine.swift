@@ -139,6 +139,17 @@ public struct SuggestionEngine: Sendable {
         "moi": "mới",
         "su": "sử dụng",
         "dung": "dụng",
+        "nua": "nữa",
+        "chang": "chẳng",
+        "nhung": "nhưng",
+        "luon": "luôn",
+        "nhieu": "nhiều",
+        "cung": "cũng",
+        "muon": "muốn",
+        "biet": "biết",
+        "phai": "phải",
+        "truoc": "trước",
+        "nguoi": "người",
         "texxt": "text",
         "tetx": "text",
         "sugget": "suggest",
@@ -215,7 +226,31 @@ public struct SuggestionEngine: Sendable {
         "như|the": "thế",
         "nhu|the": "thế",
         "thế|nao": "nào",
-        "the|nao": "nào"
+        "the|nao": "nào",
+        "bị|loi": "lỗi",
+        "bi|loi": "lỗi",
+        "nữa|y": "ý",
+        "nua|y": "ý",
+        "ý|ma": "mà",
+        "y|ma": "mà",
+        "nữa|ma": "mà",
+        "nua|ma": "mà",
+        "nhưng|ma": "mà",
+        "nhung|ma": "mà",
+        "mà|no": "nó",
+        "ma|no": "nó",
+        "không|du": "đủ",
+        "khong|du": "đủ",
+        "chưa|du": "đủ",
+        "chua|du": "đủ",
+        "khá|dai": "dài",
+        "kha|dai": "dài",
+        "nhưng|lai": "lại",
+        "nhung|lai": "lại",
+        "mà|lai": "lại",
+        "ma|lai": "lại",
+        "lại|khong": "không",
+        "lai|khong": "không"
     ]
 
     /// Computes ASCII edit distance between two short strings.
@@ -684,7 +719,7 @@ public struct SuggestionEngine: Sendable {
 
             // 1B. Tier 2: Full-Sentence Repair/Polish if the surrounding sentence has multiple words & issues (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
             let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-            if fullWordsCount >= 2 && fullWordsCount <= 16 {
+            if fullWordsCount >= 2 && fullWordsCount <= 48 {
                 let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
                 if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
                     add(SuggestionItem(
@@ -814,7 +849,7 @@ public struct SuggestionEngine: Sendable {
 
             // 2C. Tier 2: Full-Sentence Repair/Polish (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
             let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
-            if fullWordsCount >= 2 && fullWordsCount <= 16 {
+            if fullWordsCount >= 2 && fullWordsCount <= 48 {
                 let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
                 if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
                     add(SuggestionItem(
