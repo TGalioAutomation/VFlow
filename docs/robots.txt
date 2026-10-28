@@ -1,37 +1,46 @@
 # ==============================================================================
 # robots.txt for VFlow (https://tgalioautomation.github.io/VFlow/)
-# Native macOS Vietnamese-English Bilingual IME & On-Device Voice AI
+# Native macOS Vietnamese-English Bilingual Input Engine & On-Device Voice AI
 # ==============================================================================
 
-# Allow all general web crawlers
+# Allow all general web crawlers + IETF AIPREF Content-Signal
 User-agent: *
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 # Explicitly welcome major search engine crawlers
 User-agent: Googlebot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: Bingbot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: Applebot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
-# Explicitly welcome modern AI & Generative Search crawlers
+# Explicitly welcome modern AI & Generative Search crawlers (RAG / Answer Engines)
 User-agent: OAI-SearchBot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: ChatGPT-User
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: PerplexityBot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: ClaudeBot
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 User-agent: Google-Extended
 Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 # XML Sitemap Location
 Sitemap: https://tgalioautomation.github.io/VFlow/sitemap.xml

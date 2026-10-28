@@ -89,26 +89,26 @@ function initInteractiveDemo() {
 
   const demoScenarios = {
     'voice_ai': {
-      before: '❌ Văn nói: "Hình như là cái phần giọng nói sang nhưng mà cần 1 thao tác AI"',
-      after: '✅ Nhấn Tab-Tab ➔ "Sau khi nhận diện giọng nói sang text, cần một thao tác AI."',
+      before: '❌ Văn nói thô: "Hình như là cái phần giọng nói sang nhưng mà cần 1 thao tác AI"',
+      after: '✅ Nhấn Tab-Tab ➔ "Sau khi nhận diện giọng nói sang văn bản, hệ thống cần một thao tác AI."',
       text: 'Hình như là sau khi nhận diện cái phần giọng nói sang nhưng mà đúng ra cần có 1 thao tác AI',
       t1: {
         key: '⇥',
         icon: '⚡',
-        label: 'Sau khi nhận diện cái phần giọng nói sang text...',
-        fullText: 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI.',
+        label: 'Sau khi nhận diện cái phần giọng nói sang văn bản...',
+        fullText: 'Sau khi nhận diện cái phần giọng nói sang văn bản nhưng mà đúng ra cần có 1 thao tác AI.',
       },
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI.',
-        fullText: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI.',
+        label: 'Sau khi nhận diện giọng nói sang văn bản, hệ thống cần một thao tác AI.',
+        fullText: 'Sau khi nhận diện giọng nói sang văn bản, hệ thống cần một thao tác AI.',
       },
       t3: {
         key: '⌥3',
         icon: '🔮',
         label: 'tự động',
-        fullText: 'Sau khi nhận diện giọng nói sang text, cần có một thao tác AI tự động.',
+        fullText: 'Sau khi nhận diện giọng nói sang văn bản, hệ thống cần một thao tác AI tự động.',
       },
       status: '🎙️ Voice ➔ ✨ AI'
     },
@@ -125,7 +125,7 @@ function initInteractiveDemo() {
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: '🛡️ Không nhảy dấu Tiếng Anh & Code (0 cần tắt bộ gõ)',
+        label: '🛡️ Không nhảy dấu Tiếng Anh & Code (không cần tắt bộ gõ)',
         fullText: 'const salary = calculateArrow(service, subclass);',
       },
       t3: {
@@ -137,7 +137,7 @@ function initInteractiveDemo() {
       status: '🛡️ Auto-Escape'
     },
     'en_grammar': {
-      before: '❌ Gõ vội: "to dang lam viec. she dont know how to fix"',
+      before: '❌ Chưa sửa: "to dang lam viec. she dont know how to fix"',
       after: '✅ Nhấn Tab-Tab ➔ "Tôi đang làm việc. She doesn\'t know how to fix it."',
       text: 'to dang lam viec. she dont know how to fix this bug',
       t1: {
@@ -161,8 +161,8 @@ function initInteractiveDemo() {
       status: '🇬🇧🇻🇳 Ngữ pháp'
     },
     'long_sentence': {
-      before: '❌ Cũ: Gõ câu dài hoặc chấm câu "." là mất ngữ cảnh',
-      after: '✅ VFlow: Giữ trọn cả đoạn dài & thu gọn "…" thông minh',
+      before: '❌ Bộ gõ cũ: Gõ câu dài hoặc dấu chấm "." là mất ngữ cảnh',
+      after: '✅ VFlow: Giữ trọn ngữ cảnh đoạn dài & thu gọn "…" thông minh',
       text: 'hom nay toi da danh nhieu thoi gian kiem tra he thong. khi nghi mot lat roi go tiep',
       t1: {
         key: '⇥',
@@ -352,7 +352,7 @@ function initInteractiveDemo() {
         voiceInterval = null;
         if (voiceSimBtn) {
           voiceSimBtn.classList.remove('recording');
-          voiceSimBtn.innerHTML = '<span>🎙️ Chạy thử Voice AI</span>';
+          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói</span>';
         }
       }
 
@@ -400,7 +400,7 @@ function initInteractiveDemo() {
           clearInterval(voiceInterval);
           voiceInterval = null;
           voiceSimBtn.classList.remove('recording');
-          voiceSimBtn.innerHTML = '<span>🎙️ Chạy thử Voice AI</span>';
+          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói</span>';
           updateSuggestions(input.value, 'voice_ai');
           setTimeout(() => {
             if (currentSuggestions[1]) applySuggestion(currentSuggestions[1], true);
