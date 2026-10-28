@@ -8,11 +8,12 @@ public struct BentoSettingsView: View {
     @ObservedObject private var store = VFlowControlCenterStore.shared
 
     // Non-destructive Live Sandbox Studio State
-    @State private var sandboxText: String = "toi dang thu go tieng viet không dau"
+    @State private var sandboxText: String = "to đang thu go tieng viet không cau"
     @State private var sandboxState: CaretPillState = .transcript
     @State private var sandboxAudioLevel: Float = 0.55
     @State private var sandboxSuggestions: [SuggestionItem] = []
-    @State private var sandboxCurrentWord: String = "dau"
+    @State private var sandboxCurrentWord: String = "cau"
+    @State private var sandboxSeverity: SuggestionSeverity = .high
     @State private var sandboxAIInferenceTask: Task<Void, Never>? = nil
     @State private var sandboxLastLatencyMs: Double = 0.0
 
@@ -733,14 +734,36 @@ public struct BentoSettingsView: View {
 
     private var aiAndVoiceTabContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Top Card: Neural Polish Controls
+            // Top Card: Neural Polish & System Prompt Studio
             ControlBentoCard(
-                title: "TRỢ LÝ NGÔN NGỮ APPLE NEURAL ENGINE (ON-DEVICE AI)",
-                subtitle: "Khôi phục dấu Tiếng Việt không dấu, điền từ nối bị khuyết và gợi ý từ tiếp theo theo ngữ cảnh",
+                title: "TRỢ LÝ NGÔN NGỮ APPLE NEURAL ENGINE & SYSTEM PROMPT STUDIO",
+                subtitle: "Tùy chỉnh System Prompt định hướng nội dung gợi ý và tự động đổi màu mức độ cần sửa trên Caret Pill",
                 systemIcon: "sparkles",
-                accentColor: VFlowTheme.purpleAccent
+                accentColor: VFlowTheme.purpleAccent,
+                accessory: {
+                    HStack(spacing: 8) {
+                        ControlStatusPill(
+                            label: "macOS 27 fm CLI",
+                            value: store.isFMCLIAvailable ? (store.useFMCLIEngine ? "ĐANG BẬT" : "SẴN SÀNG") : "KHÔNG CÓ",
+                            level: store.isFMCLIAvailable ? (store.useFMCLIEngine ? .healthy : .warning) : .inactive
+                        )
+                        Button(action: { store.resetSystemPromptToPresetDefault() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Khôi phục Prompt")
+                            }
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Color.white.opacity(0.08))
+                            .foregroundColor(.white.opacity(0.85))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             ) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 20) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Phong cách gợi ý câu (Polish Tone)")
@@ -756,13 +779,144 @@ public struct BentoSettingsView: View {
 
                         Spacer()
 
-                        HStack(spacing: 8) {
-                            Text("Kích hoạt Apple FoundationModels ✨ (Neural Polish)")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundColor(.white)
-                            LiquidGlassSwitch(isOn: $store.isNeuralPolishEnabled, accentColor: VFlowTheme.purpleAccent)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Text("Kích hoạt Apple FoundationModels ✨ (Neural Polish)")
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundColor(.white)
+                                LiquidGlassSwitch(isOn: $store.isNeuralPolishEnabled, accentColor: VFlowTheme.purpleAccent)
+                            }
+
+                            HStack(spacing: 8) {
+                                Text(store.isFMCLIAvailable ? "Tùy chọn dùng công cụ '/usr/bin/fm' CLI (macOS 27)" : "Công cụ '/usr/bin/fm' CLI (Chỉ hỗ trợ trên macOS 27+)")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(store.isFMCLIAvailable ? .white.opacity(0.85) : .white.opacity(0.45))
+                                LiquidGlassSwitch(
+                                    isOn: Binding(
+                                        get: { store.useFMCLIEngine && store.isFMCLIAvailable },
+                                        set: { newVal in
+                                            if store.isFMCLIAvailable {
+                                                store.useFMCLIEngine = newVal
+                                            }
+                                        }
+                                    ),
+                                    accentColor: VFlowTheme.cyanAccent
+                                )
+                                .opacity(store.isFMCLIAvailable ? 1.0 : 0.4)
+                            }
                         }
                     }
+
+                    Divider().background(Color.white.opacity(0.08))
+
+                    // System Prompt Preset Selector Pills
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Bộ mẫu System Prompt (Chọn nhanh quy tắc gợi ý & chấm mức độ chuẩn):")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                            Spacer()
+                            Text("~\(store.systemPromptTokenCount) tokens")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(VFlowTheme.purpleAccent.opacity(0.18))
+                                .foregroundColor(VFlowTheme.purpleAccent)
+                                .clipShape(Capsule())
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach(SystemPromptPreset.allCases) { preset in
+                                let isSelected = store.systemPromptPreset == preset
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+                                        store.selectSystemPromptPreset(preset)
+                                        recomputeSandboxSuggestions(for: sandboxText)
+                                    }
+                                }) {
+                                    Text(preset.displayName)
+                                        .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            isSelected
+                                                ? VFlowTheme.purpleAccent.opacity(0.26)
+                                                : Color.white.opacity(0.06)
+                                        )
+                                        .foregroundColor(isSelected ? .white : .white.opacity(0.75))
+                                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .stroke(
+                                                    isSelected ? VFlowTheme.purpleAccent.opacity(0.55) : Color.white.opacity(0.08),
+                                                    lineWidth: 1
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Text(store.systemPromptPreset.subtitle)
+                            .font(.system(size: 10.5))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+
+                    // Editable System Prompt TextField/TextEditor
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Nội dung System Prompt đang áp dụng (Chỉnh sửa tự do):")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.75))
+
+                        TextEditor(
+                            text: Binding(
+                                get: { store.customSystemPrompt },
+                                set: { newVal in
+                                    if store.customSystemPrompt != newVal {
+                                        store.customSystemPrompt = newVal
+                                        if store.systemPromptPreset != .custom && newVal != store.systemPromptPreset.defaultPrompt {
+                                            store.systemPromptPreset = .custom
+                                        }
+                                        recomputeSandboxSuggestions(for: sandboxText)
+                                    }
+                                }
+                            )
+                        )
+                        .font(.system(size: 12))
+                        .scrollContentBackground(.hidden)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .frame(height: 66)
+                        .background(Color.black.opacity(0.32))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(VFlowTheme.purpleAccent.opacity(0.32), lineWidth: 1)
+                        )
+                    }
+
+                    // 3-Level Color-Only Severity Legend
+                    HStack(spacing: 16) {
+                        HStack(spacing: 6) {
+                            Circle().fill(VFlowTheme.cyanAccent).frame(width: 8, height: 8)
+                            Text("Màu Cyan: Câu chuẩn / Gợi ý từ thường")
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.white.opacity(0.72))
+                        }
+                        HStack(spacing: 6) {
+                            Circle().fill(VFlowTheme.amberWarn).frame(width: 8, height: 8)
+                            Text("Màu Vàng Amber: Có 1 lỗi nhẹ / thiếu dấu")
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.white.opacity(0.72))
+                        }
+                        HStack(spacing: 6) {
+                            Circle().fill(VFlowTheme.roseAlert).frame(width: 8, height: 8)
+                            Text("Màu Đỏ Rose: Sai chính tả nặng / Lệch System Prompt (Tự đẩy ✨ lên phím Tab)")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundColor(VFlowTheme.roseAlert)
+                        }
+                    }
+                    .padding(.top, 2)
                 }
             }
 
@@ -950,10 +1104,11 @@ public struct BentoSettingsView: View {
                             .foregroundColor(.white.opacity(0.7))
 
                         HStack(spacing: 8) {
+                            presetScenarioButton("Sai nặng & Lệch chuẩn", sample: "to đang thu go tieng viet không cau")
                             presetScenarioButton("Không dấu", sample: "toi dang thu go tieng viet không dau")
                             presetScenarioButton("Khuyết từ & thiếu dấu", sample: "thực co đang hoạt động tot")
                             presetScenarioButton("Teencode & lỗi gõ", sample: "không  thị duoc hết text")
-                            presetScenarioButton("Song ngữ VI + EN", sample: "phân suggest text bị lỗi chưa đạt value")
+                            presetScenarioButton("Câu đã chuẩn", sample: "Tôi đang thử gõ tiếng Việt có dấu")
                         }
                     }
 
@@ -995,8 +1150,9 @@ public struct BentoSettingsView: View {
                                 currentWord: sandboxCurrentWord,
                                 suggestions: sandboxSuggestions,
                                 inputMethod: store.inputMethod,
+                                severity: sandboxSeverity,
                                 onUndo: {
-                                    sandboxText = "toi dang thu go tieng viet không dau"
+                                    sandboxText = "to đang thu go tieng viet không cau"
                                     recomputeSandboxSuggestions(for: sandboxText)
                                 },
                                 onCycleTone: {
@@ -1048,13 +1204,22 @@ public struct BentoSettingsView: View {
         let sentenceWords = hasTrailingSpace ? words : Array(words.dropLast())
 
         sandboxCurrentWord = currentWord
+        let immediateSeverity = SuggestionEngine.evaluateSeverity(
+            rawSentence: fullText,
+            tone: store.currentTone,
+            preset: store.systemPromptPreset,
+            customPrompt: store.customSystemPrompt
+        )
+        sandboxSeverity = immediateSeverity
+
         var immediate = SuggestionEngine.suggest(
             currentWord: currentWord,
             rawWord: currentWord,
             sentenceWords: sentenceWords,
             tone: store.currentTone,
             fullSentenceText: fullText,
-            wordAfterCursor: ""
+            wordAfterCursor: "",
+            promoteAIPolishOnHighSeverity: true
         )
 
         if !currentWord.isEmpty && immediate.count < 3 {
@@ -1093,19 +1258,30 @@ public struct BentoSettingsView: View {
             ) {
                 guard !Task.isCancelled, self.sandboxText == capturedText else { return }
                 self.sandboxLastLatencyMs = max(1.0, (CFAbsoluteTimeGetCurrent() - t0) * 1000.0)
+                let mergedSeverity = max(self.sandboxSeverity, aiResult.severity)
+                self.sandboxSeverity = mergedSeverity
                 var merged = self.sandboxSuggestions
                 let normalized = VietnameseTextPolisher.normalizePunctuation(capturedText)
                 if !aiResult.polishedSentence.isEmpty,
                    aiResult.polishedSentence.lowercased() != normalized.lowercased() {
-                    let aiItem = SuggestionItem(text: aiResult.polishedSentence, kind: .aiPolish, replaceCurrentWord: false)
+                    let aiItem = SuggestionItem(
+                        text: aiResult.polishedSentence,
+                        kind: .aiPolish,
+                        replaceCurrentWord: false,
+                        severity: max(.moderate, mergedSeverity)
+                    )
                     if let idx = merged.firstIndex(where: { $0.kind == .aiPolish }) {
                         merged[idx] = aiItem
+                    } else if mergedSeverity == .high {
+                        merged.insert(aiItem, at: 0)
+                        if merged.count > 3 { merged = Array(merged.prefix(3)) }
                     } else if merged.count >= 2 {
                         merged.insert(aiItem, at: 1)
                         if merged.count > 3 { merged = Array(merged.prefix(3)) }
                     } else {
                         merged.append(aiItem)
                     }
+                    merged = SuggestionEngine.prioritizeForSeverity(merged, severity: mergedSeverity)
                 }
                 if currentWord.isEmpty,
                    !aiResult.nextWord.isEmpty,

@@ -93,6 +93,7 @@ public final class CaretHUDModel: ObservableObject {
     @Published public var audioLevel: Float = 0.35
     @Published public var currentTone: PolishTone = .natural
     @Published public var inputMethod: InputMethod = .telex
+    @Published public var severity: SuggestionSeverity = .normal
 
     public var onSelectSuggestion: ((SuggestionItem) -> Void)?
     public var onToggleInputMethod: (() -> Void)?
@@ -148,8 +149,14 @@ public final class CaretHUDModel: ObservableObject {
             sentenceWords: sentenceWords,
             tone: currentTone,
             fullSentenceText: fullSentence,
-            wordAfterCursor: wordAfterCursor
+            wordAfterCursor: wordAfterCursor,
+            promoteAIPolishOnHighSeverity: true
         )
+        let currentSeverity = SuggestionEngine.evaluateSeverity(
+            rawSentence: fullSentence,
+            tone: currentTone
+        )
+        self.severity = currentSeverity
 
         // Stage 1b: Synchronous <1ms Apple NSSpellChecker on-device neural completion for partial words
         if !currentWord.isEmpty && immediateSuggestions.count < 3 {
@@ -207,21 +214,29 @@ public final class CaretHUDModel: ObservableObject {
             let normalizedInput = VietnameseTextPolisher.normalizePunctuation(capturedSentence)
 
             // Merge Neural Engine ✨ Full-Sentence Polish if it improves/restores diacritics on the sentence
+            let mergedSeverity = max(self.severity, aiResult.severity)
+            self.severity = mergedSeverity
+
             if !aiResult.polishedSentence.isEmpty,
                aiResult.polishedSentence.lowercased() != normalizedInput.lowercased() {
                 let aiPolishItem = SuggestionItem(
                     text: aiResult.polishedSentence,
                     kind: .aiPolish,
-                    replaceCurrentWord: false
+                    replaceCurrentWord: false,
+                    severity: max(.moderate, mergedSeverity)
                 )
                 if let existingIdx = updated.firstIndex(where: { $0.kind == .aiPolish }) {
                     updated[existingIdx] = aiPolishItem
+                } else if mergedSeverity == .high {
+                    updated.insert(aiPolishItem, at: 0)
+                    if updated.count > 3 { updated = Array(updated.prefix(3)) }
                 } else if updated.count >= 2 {
                     updated.insert(aiPolishItem, at: 1)
                     if updated.count > 3 { updated = Array(updated.prefix(3)) }
                 } else {
                     updated.append(aiPolishItem)
                 }
+                updated = SuggestionEngine.prioritizeForSeverity(updated, severity: mergedSeverity)
             }
 
             // Merge Neural Engine next-word prediction when cursor is after a completed word
@@ -330,6 +345,7 @@ public struct CaretHUDContainerView: View {
             currentWord: model.currentWord,
             suggestions: model.suggestions,
             inputMethod: model.inputMethod,
+            severity: model.severity,
             onUndo: { model.onUndo?() },
             onCycleTone: { model.onCycleTone?() },
             onSelectSuggestion: { item in model.onSelectSuggestion?(item) },

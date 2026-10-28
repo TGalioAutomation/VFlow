@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 
 /// Bridge for interacting with macOS Accessibility APIs (AXUIElement).
 public final class AccessibilityBridge: @unchecked Sendable {
@@ -9,6 +10,82 @@ public final class AccessibilityBridge: @unchecked Sendable {
     private let lock = NSLock()
 
     public init() {}
+
+    /// Pure deterministic evaluator for whether a field's Accessibility metadata or value indicates a password / hidden-text field.
+    public static func isSecureFieldMetadata(
+        role: String?,
+        subrole: String?,
+        description: String?,
+        placeholder: String?,
+        value: String?,
+        isSystemSecureInput: Bool = false
+    ) -> Bool {
+        if isSystemSecureInput {
+            return true
+        }
+        if let r = role?.lowercased(), r.contains("secure") {
+            return true
+        }
+        if let sr = subrole?.lowercased(), sr.contains("secure") {
+            return true
+        }
+
+        let sensitiveKeywords = [
+            "password", "mật khẩu", "mat khau", "passcode", "mã pin", "secret key", "hide text", "ẩn văn bản"
+        ]
+        for meta in [description, placeholder].compactMap({ $0?.lowercased() }) where !meta.isEmpty {
+            if sensitiveKeywords.contains(where: { meta.contains($0) }) {
+                return true
+            }
+        }
+
+        if let val = value?.trimmingCharacters(in: .whitespacesAndNewlines), !val.isEmpty {
+            let bulletChars: Set<Character> = ["•", "●", "✱", "⚫", "◦", "▪"]
+            if val.allSatisfy({ bulletChars.contains($0) }) {
+                return true
+            }
+            if val.count >= 2 && val.allSatisfy({ $0 == "*" }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Returns true if macOS Secure Event Input is active or the currently focused UI element is a password / hidden-text field.
+    public func isFocusedElementSecureOrHidden() -> Bool {
+        if IsSecureEventInputEnabled() {
+            return true
+        }
+        guard let element = focusedUIElement() else {
+            return false
+        }
+
+        func readStringAttr(_ attr: String) -> String? {
+            var ref: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, attr as CFString, &ref) == .success,
+               let str = ref as? String {
+                return str
+            }
+            return nil
+        }
+
+        let role = readStringAttr(kAXRoleAttribute)
+        let subrole = readStringAttr(kAXSubroleAttribute)
+        let roleDesc = readStringAttr(kAXRoleDescriptionAttribute)
+        let desc = readStringAttr(kAXDescriptionAttribute) ?? readStringAttr(kAXTitleAttribute)
+        let combinedDesc = [roleDesc, desc].compactMap { $0 }.joined(separator: " ")
+        let placeholder = readStringAttr(kAXPlaceholderValueAttribute)
+        let value = readStringAttr(kAXValueAttribute)
+
+        return Self.isSecureFieldMetadata(
+            role: role,
+            subrole: subrole,
+            description: combinedDesc,
+            placeholder: placeholder,
+            value: value,
+            isSystemSecureInput: false
+        )
+    }
 
     /// Ensures Electron/Chromium apps expose their AX tree (AXManualAccessibility).
     public func ensureManualAccessibility(for pid: pid_t) {

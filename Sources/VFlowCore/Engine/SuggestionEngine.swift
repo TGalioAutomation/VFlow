@@ -19,13 +19,16 @@ public struct SuggestionItem: Equatable, Identifiable, Sendable {
     public let replaceLastCompletedWord: Bool
     /// Optional target word length to replace when `replaceLastCompletedWord` is true.
     public let targetWordToReplace: String
+    /// Urgency/severity level of the suggestion (.normal Cyan, .moderate Amber, .high Rose).
+    public let severity: SuggestionSeverity
 
     public init(
         text: String,
         kind: SuggestionKind,
         replaceCurrentWord: Bool = true,
         replaceLastCompletedWord: Bool = false,
-        targetWordToReplace: String = ""
+        targetWordToReplace: String = "",
+        severity: SuggestionSeverity = .normal
     ) {
         self.id = "\(kind.rawValue):\(text)"
         self.text = text
@@ -33,6 +36,7 @@ public struct SuggestionItem: Equatable, Identifiable, Sendable {
         self.replaceCurrentWord = replaceCurrentWord
         self.replaceLastCompletedWord = replaceLastCompletedWord
         self.targetWordToReplace = targetWordToReplace
+        self.severity = severity
     }
 }
 
@@ -410,6 +414,122 @@ public struct SuggestionEngine: Sendable {
         return nil
     }
 
+    /// Evaluates how urgently the input sentence needs typo correction, diacritic restoration, or System Prompt alignment.
+    public static func evaluateSeverity(
+        rawSentence: String,
+        polishedSentence: String = "",
+        tone: PolishTone = .natural,
+        preset: SystemPromptPreset = OnDeviceAIEngine.activeSystemPromptPreset,
+        customPrompt: String = OnDeviceAIEngine.customSystemPrompt
+    ) -> SuggestionSeverity {
+        let trimmed = rawSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .normal }
+
+        let effectiveTone: PolishTone = {
+            switch preset {
+            case .formalEmail: return .polite
+            case .concise: return .concise
+            default: return tone
+            }
+        }()
+
+        let polished = polishedSentence.isEmpty
+            ? VietnameseTextPolisher.polish(trimmed, tone: effectiveTone)
+            : polishedSentence
+        let normalizedInput = VietnameseTextPolisher.normalizePunctuation(trimmed)
+
+        let rawTokens = normalizedInput
+            .components(separatedBy: .whitespaces)
+            .map { $0.trimmingCharacters(in: .punctuationCharacters).lowercased() }
+            .filter { !$0.isEmpty }
+        let polishedTokens = polished
+            .components(separatedBy: .whitespaces)
+            .map { $0.trimmingCharacters(in: .punctuationCharacters).lowercased() }
+            .filter { !$0.isEmpty }
+
+        guard !rawTokens.isEmpty else { return .normal }
+
+        let lowerPrompt = customPrompt.lowercased()
+        let enforcesFormal = preset == .formalEmail ||
+            lowerPrompt.contains("trang trọng") ||
+            lowerPrompt.contains("lịch sự") ||
+            lowerPrompt.contains("email") ||
+            lowerPrompt.contains("không dùng từ viết tắt") ||
+            lowerPrompt.contains("teencode")
+        let enforcesConcise = preset == .concise ||
+            lowerPrompt.contains("ngắn gọn") ||
+            lowerPrompt.contains("súc tích") ||
+            lowerPrompt.contains("rút gọn")
+
+        // 1. Check System Prompt explicit rule violations
+        if enforcesFormal {
+            let informalOrTeencode: Set<String> = [
+                "ko", "k", "dc", "đc", "mn", "mik", "mk", "vs", "ntn", "j", "cx", "trc", "bh", "hnay", "mày", "tao"
+            ]
+            if rawTokens.contains(where: { informalOrTeencode.contains($0) }) {
+                return .high
+            }
+        }
+        if enforcesConcise {
+            let lowerRaw = normalizedInput.lowercased()
+            for filler in VietnameseTextPolisher.fillerPhrases where lowerRaw.contains(filler) {
+                return .high
+            }
+            if rawTokens.contains(where: { VietnameseTextPolisher.singleWordFillers.contains($0) }) {
+                return .high
+            }
+        }
+
+        // 2. Count token-level differences between rawTokens and polishedTokens
+        var changedTokenCount = abs(polishedTokens.count - rawTokens.count)
+        let minCount = min(rawTokens.count, polishedTokens.count)
+        for i in 0..<minCount {
+            if rawTokens[i] != polishedTokens[i] {
+                changedTokenCount += 1
+            }
+        }
+
+        // Check missing bridge words (dropped word between two words)
+        if rawTokens.count >= 2 {
+            for i in 0..<(rawTokens.count - 1) {
+                let pair = "\(rawTokens[i])|\(rawTokens[i + 1])"
+                if missingBridgeWords[pair] != nil {
+                    changedTokenCount = max(changedTokenCount, 2)
+                }
+            }
+        }
+
+        if changedTokenCount >= 2 {
+            return .high
+        }
+        if changedTokenCount == 1 || polished.lowercased() != normalizedInput.lowercased() {
+            return .moderate
+        }
+        // Single-word check if only 1 word is typed
+        if let first = rawTokens.first {
+            if instantWordFixes[first] != nil || TeencodeDictionary.mapping[first] != nil {
+                return .moderate
+            }
+        }
+        return .normal
+    }
+
+    /// Promotes the full-sentence `.aiPolish` suggestion (`✨`) to Slot #1 (`⇥ Tab`) when `severity == .high`.
+    public static func prioritizeForSeverity(
+        _ items: [SuggestionItem],
+        severity: SuggestionSeverity
+    ) -> [SuggestionItem] {
+        guard severity == .high,
+              let aiIndex = items.firstIndex(where: { $0.kind == .aiPolish }),
+              aiIndex > 0 else {
+            return items
+        }
+        var reordered = items
+        let aiItem = reordered.remove(at: aiIndex)
+        reordered.insert(aiItem, at: 0)
+        return reordered
+    }
+
     /// Generates up to 3 high-value contextual suggestions based on current word, raw buffer, live sentence words, and full box text.
     public static func suggest(
         currentWord: String,
@@ -417,7 +537,8 @@ public struct SuggestionEngine: Sendable {
         sentenceWords: [String],
         tone: PolishTone = .natural,
         fullSentenceText: String = "",
-        wordAfterCursor: String = ""
+        wordAfterCursor: String = "",
+        promoteAIPolishOnHighSeverity: Bool = false
     ) -> [SuggestionItem] {
         var items: [SuggestionItem] = []
         var seen: Set<String> = []
@@ -439,6 +560,20 @@ public struct SuggestionEngine: Sendable {
             if !cleanFull.isEmpty { return cleanFull }
             return (sentenceWords + (trimmedCurrent.isEmpty ? [] : [trimmedCurrent])).joined(separator: " ")
         }()
+
+        let effectiveTone: PolishTone = {
+            switch OnDeviceAIEngine.activeSystemPromptPreset {
+            case .formalEmail: return .polite
+            case .concise: return .concise
+            default: return tone
+            }
+        }()
+        let polishedFull = VietnameseTextPolisher.polish(candidateFullSentence, tone: effectiveTone)
+        let sentenceSeverity = evaluateSeverity(
+            rawSentence: candidateFullSentence,
+            polishedSentence: polishedFull,
+            tone: effectiveTone
+        )
 
         // CASE 1: User is actively typing or cursor is on a word (e.g. "duoc|" inside "không  thị duoc| hết text")
         if !trimmedCurrent.isEmpty {
@@ -464,7 +599,8 @@ public struct SuggestionEngine: Sendable {
                     text: primaryFix,
                     kind: .teencodeExpansion,
                     replaceCurrentWord: true,
-                    targetWordToReplace: trimmedCurrent
+                    targetWordToReplace: trimmedCurrent,
+                    severity: max(.moderate, sentenceSeverity)
                 ))
             }
             if let enExpanded = TeencodeDictionary.englishMapping[lowerCurrent] ?? TeencodeDictionary.englishMapping[lowerRaw] {
@@ -472,17 +608,22 @@ public struct SuggestionEngine: Sendable {
                     text: enExpanded,
                     kind: .teencodeExpansion,
                     replaceCurrentWord: true,
-                    targetWordToReplace: trimmedCurrent
+                    targetWordToReplace: trimmedCurrent,
+                    severity: max(.moderate, sentenceSeverity)
                 ))
             }
 
             // 1B. Tier 2: Full-Sentence Repair/Polish if the surrounding sentence has multiple words & issues (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
             let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
             if fullWordsCount >= 2 && fullWordsCount <= 16 {
-                let polished = VietnameseTextPolisher.polish(candidateFullSentence, tone: tone)
                 let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
-                if !polished.isEmpty && polished.lowercased() != normalizedInput.lowercased() {
-                    add(SuggestionItem(text: polished, kind: .aiPolish, replaceCurrentWord: false))
+                if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
+                    add(SuggestionItem(
+                        text: polishedFull,
+                        kind: .aiPolish,
+                        replaceCurrentWord: false,
+                        severity: max(.moderate, sentenceSeverity)
+                    ))
                 }
             }
 
@@ -492,7 +633,8 @@ public struct SuggestionEngine: Sendable {
                     text: secondaryFix,
                     kind: .teencodeExpansion,
                     replaceCurrentWord: true,
-                    targetWordToReplace: trimmedCurrent
+                    targetWordToReplace: trimmedCurrent,
+                    severity: .moderate
                 ))
             }
 
@@ -502,7 +644,8 @@ public struct SuggestionEngine: Sendable {
                 add(SuggestionItem(
                     text: bridge,
                     kind: .teencodeExpansion,
-                    replaceCurrentWord: false
+                    replaceCurrentWord: false,
+                    severity: max(.moderate, sentenceSeverity)
                 ))
             }
 
@@ -513,7 +656,7 @@ public struct SuggestionEngine: Sendable {
                     for cand in biCands {
                         let candLower = cand.lowercased()
                         if candLower.hasPrefix(lowerCurrent) || stripDiacritics(candLower).hasPrefix(asciiCurrent) {
-                            add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent))
+                            add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                         }
                     }
                 }
@@ -523,7 +666,7 @@ public struct SuggestionEngine: Sendable {
                 for cand in nextCandidates {
                     let candLower = cand.lowercased()
                     if candLower.hasPrefix(lowerCurrent) || stripDiacritics(candLower).hasPrefix(asciiCurrent) {
-                        add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent))
+                        add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                     }
                 }
             }
@@ -533,7 +676,7 @@ public struct SuggestionEngine: Sendable {
                 let cleanPhrase = phrase.trimmingCharacters(in: .whitespaces)
                 let lowerPhrase = cleanPhrase.lowercased()
                 if lowerPhrase.hasPrefix(lowerCurrent) && lowerPhrase != lowerCurrent {
-                    add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent))
+                    add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                 }
             }
 
@@ -543,7 +686,7 @@ public struct SuggestionEngine: Sendable {
                     let cleanPhrase = phrase.trimmingCharacters(in: .whitespaces)
                     let strippedPhrase = stripDiacritics(cleanPhrase.lowercased())
                     if strippedPhrase.hasPrefix(asciiCurrent) && cleanPhrase.lowercased() != lowerCurrent {
-                        add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent))
+                        add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                     }
                 }
             }
@@ -553,12 +696,14 @@ public struct SuggestionEngine: Sendable {
                 for enWord in englishCompletions {
                     let lowerEn = enWord.lowercased()
                     if (lowerEn.hasPrefix(lowerRaw) || lowerEn.hasPrefix(asciiCurrent)) && lowerEn != lowerCurrent {
-                        add(SuggestionItem(text: enWord, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent))
+                        add(SuggestionItem(text: enWord, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                     }
                 }
             }
 
-            return items
+            return promoteAIPolishOnHighSeverity
+                ? prioritizeForSeverity(items, severity: sentenceSeverity)
+                : items
         }
 
         // CASE 2: Cursor is after a space (either at end of sentence or in a gap between two words like "không | thị")
@@ -573,7 +718,8 @@ public struct SuggestionEngine: Sendable {
                 add(SuggestionItem(
                     text: bridge,
                     kind: .teencodeExpansion,
-                    replaceCurrentWord: false
+                    replaceCurrentWord: false,
+                    severity: max(.moderate, sentenceSeverity)
                 ))
             }
 
@@ -592,17 +738,22 @@ public struct SuggestionEngine: Sendable {
                     kind: .teencodeExpansion,
                     replaceCurrentWord: false,
                     replaceLastCompletedWord: true,
-                    targetWordToReplace: cleanLast
+                    targetWordToReplace: cleanLast,
+                    severity: max(.moderate, sentenceSeverity)
                 ))
             }
 
             // 2C. Tier 2: Full-Sentence Repair/Polish (e.g. "không  thị duoc hết text" -> "✨ không hiển thị được hết text")
             let fullWordsCount = candidateFullSentence.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
             if fullWordsCount >= 2 && fullWordsCount <= 16 {
-                let polished = VietnameseTextPolisher.polish(candidateFullSentence, tone: tone)
                 let normalizedInput = VietnameseTextPolisher.normalizePunctuation(candidateFullSentence)
-                if !polished.isEmpty && polished.lowercased() != normalizedInput.lowercased() {
-                    add(SuggestionItem(text: polished, kind: .aiPolish, replaceCurrentWord: false))
+                if !polishedFull.isEmpty && polishedFull.lowercased() != normalizedInput.lowercased() {
+                    add(SuggestionItem(
+                        text: polishedFull,
+                        kind: .aiPolish,
+                        replaceCurrentWord: false,
+                        severity: max(.moderate, sentenceSeverity)
+                    ))
                 }
             }
 
@@ -613,7 +764,7 @@ public struct SuggestionEngine: Sendable {
                     .joined(separator: " ")
                 if let biCands = bigramCollocations[lastTwo] {
                     for cand in biCands {
-                        add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false))
+                        add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false, severity: sentenceSeverity))
                     }
                 }
             }
@@ -621,12 +772,14 @@ public struct SuggestionEngine: Sendable {
             // 2E. Unigram Next-Word Collocations
             if let nextCandidates = nextWordCollocations[lowerLast] {
                 for cand in nextCandidates {
-                    add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false))
+                    add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false, severity: sentenceSeverity))
                 }
             }
         }
 
-        return items
+        return promoteAIPolishOnHighSeverity
+            ? prioritizeForSeverity(items, severity: sentenceSeverity)
+            : items
     }
 
     /// Strips Vietnamese diacritics for fuzzy prefix matching.

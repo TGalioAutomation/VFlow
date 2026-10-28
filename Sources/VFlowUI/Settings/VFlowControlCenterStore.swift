@@ -119,6 +119,28 @@ public final class VFlowControlCenterStore: ObservableObject {
         }
     }
 
+    @Published public var systemPromptPreset: SystemPromptPreset {
+        didSet {
+            UserDefaults.standard.set(systemPromptPreset.rawValue, forKey: Keys.systemPromptPreset)
+            OnDeviceAIEngine.activeSystemPromptPreset = systemPromptPreset
+        }
+    }
+
+    @Published public var customSystemPrompt: String {
+        didSet {
+            UserDefaults.standard.set(customSystemPrompt, forKey: Keys.customSystemPrompt)
+            OnDeviceAIEngine.customSystemPrompt = customSystemPrompt
+            updatePromptTokenCount()
+        }
+    }
+
+    @Published public var useFMCLIEngine: Bool {
+        didSet {
+            UserDefaults.standard.set(useFMCLIEngine, forKey: Keys.useFMCLIEngine)
+            OnDeviceAIEngine.useFMCLIEngine = useFMCLIEngine
+        }
+    }
+
     @Published public var dictationLanguage: String {
         didSet {
             UserDefaults.standard.set(dictationLanguage, forKey: Keys.dictationLanguage)
@@ -137,6 +159,8 @@ public final class VFlowControlCenterStore: ObservableObject {
     @Published public private(set) var isAccessibilityTrusted: Bool = false
     @Published public private(set) var isEventTapActive: Bool = false
     @Published public private(set) var isNeuralEngineAvailable: Bool = false
+    @Published public private(set) var isFMCLIAvailable: Bool = false
+    @Published public private(set) var systemPromptTokenCount: Int = 0
     @Published public private(set) var aiCachedEntries: Int = 0
     @Published public private(set) var aiMaxCacheEntries: Int = 128
     @Published public private(set) var aiTotalInferences: Int = 0
@@ -179,6 +203,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         static let autoEnglishRestore = "vflow.settings.autoEnglishRestore.v2"
         static let currentTone = "vflow.settings.currentTone.v2"
         static let isNeuralPolishEnabled = "vflow.settings.isNeuralPolishEnabled.v2"
+        static let systemPromptPreset = "vflow.settings.systemPromptPreset.v1"
+        static let customSystemPrompt = "vflow.settings.customSystemPrompt.v1"
+        static let useFMCLIEngine = "vflow.settings.useFMCLIEngine.v1"
         static let dictationLanguage = "vflow.settings.dictationLanguage.v2"
         static let voiceSimulationMode = "vflow.settings.voiceSimulationMode.v3"
     }
@@ -191,6 +218,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         let savedAutoEN = defaults.object(forKey: Keys.autoEnglishRestore) as? Bool ?? true
         let savedTone = defaults.string(forKey: Keys.currentTone).flatMap(PolishTone.init(rawValue:)) ?? .natural
         let savedNeuralPolish = defaults.object(forKey: Keys.isNeuralPolishEnabled) as? Bool ?? true
+        let savedPreset = defaults.string(forKey: Keys.systemPromptPreset).flatMap(SystemPromptPreset.init(rawValue:)) ?? .standard
+        let savedCustomPrompt = defaults.string(forKey: Keys.customSystemPrompt) ?? savedPreset.defaultPrompt
+        let savedUseFMCLI = defaults.object(forKey: Keys.useFMCLIEngine) as? Bool ?? false
         let savedDictationLang = defaults.string(forKey: Keys.dictationLanguage) ?? "vi-VN"
         let savedVoiceSim = defaults.object(forKey: Keys.voiceSimulationMode) as? Bool ?? false
 
@@ -200,6 +230,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         self.expandMacrosOnSpace = CustomMacroRegistry.shared.expandMacrosOnSpace
         self.currentTone = savedTone
         self.isNeuralPolishEnabled = savedNeuralPolish
+        self.systemPromptPreset = savedPreset
+        self.customSystemPrompt = savedCustomPrompt
+        self.useFMCLIEngine = savedUseFMCLI && OnDeviceAIEngine.isFMCLIAvailable
         self.dictationLanguage = savedDictationLang
         self.voiceSimulationMode = savedVoiceSim
         self.macros = CustomMacroRegistry.shared.allItems()
@@ -214,11 +247,42 @@ public final class VFlowControlCenterStore: ObservableObject {
         CaretHUDModel.shared.inputMethod = savedMethod
         CaretHUDModel.shared.currentTone = savedTone
         OnDeviceAIEngine.isNeuralPolishEnabled = savedNeuralPolish
+        OnDeviceAIEngine.activeSystemPromptPreset = savedPreset
+        OnDeviceAIEngine.customSystemPrompt = savedCustomPrompt
+        OnDeviceAIEngine.useFMCLIEngine = savedUseFMCLI && OnDeviceAIEngine.isFMCLIAvailable
         VoiceDictationService.shared.setDictationLanguage(savedDictationLang)
         VoiceDictationService.shared.isSimulationMode = savedVoiceSim
 
         refreshTelemetry()
+        updatePromptTokenCount()
         startTelemetryPolling()
+    }
+
+    public func selectSystemPromptPreset(_ preset: SystemPromptPreset) {
+        systemPromptPreset = preset
+        if preset != .custom {
+            customSystemPrompt = preset.defaultPrompt
+        }
+    }
+
+    public func resetSystemPromptToPresetDefault() {
+        let targetPreset = systemPromptPreset == .custom ? .standard : systemPromptPreset
+        systemPromptPreset = targetPreset
+        customSystemPrompt = targetPreset.defaultPrompt
+        showTemporaryBanner("Đã khôi phục System Prompt về mặc định (\(targetPreset.displayName)).")
+    }
+
+    public func updatePromptTokenCount() {
+        let promptText = customSystemPrompt
+        systemPromptTokenCount = OnDeviceAIEngine.estimateTokenCount(for: promptText)
+        if OnDeviceAIEngine.isFMCLIAvailable && useFMCLIEngine {
+            Task { @MainActor in
+                let exactCount = await OnDeviceAIEngine.shared.countTokensViaFMCLI(promptText)
+                if self.customSystemPrompt == promptText {
+                    self.systemPromptTokenCount = exactCount
+                }
+            }
+        }
     }
 
     /// Synchronizes inputMethod when toggled externally (e.g. via `⌥Z` hotkey in `EventTapHook` or Caret Pill click).
@@ -247,6 +311,7 @@ public final class VFlowControlCenterStore: ObservableObject {
         isAccessibilityTrusted = AccessibilityBridge.shared.isAccessibilityGranted(prompt: false)
         isEventTapActive = EventTapHook.shared.isTapActive
         isNeuralEngineAvailable = OnDeviceAIEngine.isFoundationModelAvailable
+        isFMCLIAvailable = OnDeviceAIEngine.isFMCLIAvailable
         isRecordingVoice = VoiceDictationService.shared.isRecording
         isMicrophoneAuthorized = VoiceDictationService.shared.isMicrophoneAuthorized
         isSpeechAuthorized = VoiceDictationService.shared.isSpeechAuthorized

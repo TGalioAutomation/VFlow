@@ -497,4 +497,95 @@ final class VietnameseEngineTests: XCTestCase {
         let p2 = VietnameseTextPolisher.polish("khi dung ra nó cần suggest chuan hon khi user co go sai và AI cần suggest lại text đúng nghia chuan")
         XCTAssertTrue(p2.lowercased().contains("khi đúng ra nó cần suggest chuẩn hơn khi user có gõ sai và ai cần suggest lại text đúng nghĩa chuẩn"))
     }
+
+    @MainActor
+    func testSystemPromptSeverityAndSecureFieldGuard() async {
+        // 1. Verify 3-Level Severity Evaluation (.normal, .moderate, .high)
+        XCTAssertEqual(
+            SuggestionEngine.evaluateSeverity(rawSentence: "Tôi đang thử gõ tiếng Việt có dấu", preset: .standard),
+            .normal
+        )
+        XCTAssertEqual(
+            SuggestionEngine.evaluateSeverity(rawSentence: "Tôi đang thử gõ tiếng Việt có dau", preset: .standard),
+            .moderate
+        )
+        XCTAssertEqual(
+            SuggestionEngine.evaluateSeverity(rawSentence: "to đang thu go tieng viet không cau", preset: .standard),
+            .high
+        )
+
+        // 2. Verify System Prompt compliance raises severity to .high when violated
+        XCTAssertEqual(
+            SuggestionEngine.evaluateSeverity(rawSentence: "tôi ko biết làm thế nào", preset: .formalEmail),
+            .high
+        )
+        XCTAssertEqual(
+            SuggestionEngine.evaluateSeverity(rawSentence: "kiểu như là hôm nay trời đẹp", preset: .concise),
+            .high
+        )
+
+        // 3. Verify promoteAIPolishOnHighSeverity places full-sentence ✨ AI Polish at index 0 (Tab ⇥)
+        let promoted = SuggestionEngine.suggest(
+            currentWord: "cau",
+            rawWord: "cau",
+            sentenceWords: ["to", "đang", "thu", "go", "tieng", "viet", "không"],
+            fullSentenceText: "to đang thu go tieng viet không cau",
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(promoted.first?.kind, .aiPolish)
+        XCTAssertEqual(promoted.first?.severity, .high)
+        XCTAssertEqual(promoted.first?.text.lowercased(), "tôi đang thử gõ tiếng việt không dấu")
+
+        // 4. Verify Password / Secure / Hidden Text Field metadata detection
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: "AXSecureTextField",
+            description: nil,
+            placeholder: nil,
+            value: nil
+        ))
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: "Nhập mật khẩu của bạn",
+            placeholder: nil,
+            value: nil
+        ))
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: nil,
+            placeholder: "Enter password",
+            value: nil
+        ))
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: nil,
+            placeholder: nil,
+            value: "••••••••"
+        ))
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: nil,
+            placeholder: nil,
+            value: "******"
+        ))
+        XCTAssertTrue(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: nil,
+            placeholder: nil,
+            value: "normal",
+            isSystemSecureInput: true
+        ))
+        XCTAssertFalse(AccessibilityBridge.isSecureFieldMetadata(
+            role: "AXTextField",
+            subrole: nil,
+            description: "Ghi chú công việc",
+            placeholder: "Nhập văn bản...",
+            value: "Xin chào Việt Nam"
+        ))
+    }
 }

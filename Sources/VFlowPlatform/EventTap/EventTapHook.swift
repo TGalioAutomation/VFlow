@@ -317,6 +317,17 @@ public final class EventTapHook: @unchecked Sendable {
             return nil
         }
 
+        // Secure / Password / Hidden Text Field Guard:
+        // Never transform Telex/VNI, never display Caret Pill HUD, and never log or send to AI when typing in a password field.
+        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+            engine.reset()
+            clearMouseReset()
+            TypingBuffer.shared.clear()
+            onDismissHUD?()
+            setLastPhysicalKey(keycode)
+            return Unmanaged.passUnretained(event)
+        }
+
         // Quick suggestion selection via Option + 1 / 2 / 3 (⌥1, ⌥2, ⌥3)
         if flags.contains(.maskAlternate) && !flags.contains(.maskCommand) && !flags.contains(.maskControl) {
             let suggestionIdx: Int? = {
@@ -459,6 +470,13 @@ public final class EventTapHook: @unchecked Sendable {
 
     /// Broadcasts the current composing word and sentence context to the Caret Pill HUD.
     public func notifyTypingState() {
+        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+            engine.reset()
+            clearMouseReset()
+            TypingBuffer.shared.clear()
+            onDismissHUD?()
+            return
+        }
         recordTypingActivity()
         var currentWord = engine.formattedWord
         let rawWord = engine.rawString
