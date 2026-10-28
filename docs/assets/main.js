@@ -1,6 +1,6 @@
 /**
  * VFlow — Flagship Promotional Landing Website
- * Interactive Caret HUD Simulation & 120fps Silk Sine-Wave Animation
+ * Interactive Pain-Point Resolver, Voice-to-AI Polish Simulator & 120fps Silk Sine-Wave HUD
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,12 +19,10 @@ function initSineWaveCanvas() {
   if (!canvas) return;
 
   const ctx = canvas.getContext('2d');
-  let animationFrameId;
   let phase = 0;
   let amplitude = 4.5;
   let targetAmplitude = 4.5;
 
-  // Retina scale
   const dpr = window.devicePixelRatio || 2;
   const width = 52;
   const height = 22;
@@ -35,17 +33,15 @@ function initSineWaveCanvas() {
   function renderWave() {
     ctx.clearRect(0, 0, width, height);
 
-    // Smooth amplitude damping
-    amplitude += (targetAmplitude - amplitude) * 0.1;
-
+    amplitude += (targetAmplitude - amplitude) * 0.12;
     const midY = height / 2;
 
     // Layer 1: Violet Sine Wave (Back layer)
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(168, 85, 247, 0.75)';
+    ctx.strokeStyle = 'rgba(168, 85, 247, 0.78)';
     ctx.lineWidth = 1.4;
     for (let x = 0; x <= width; x++) {
-      const y = midY + Math.sin((x * 0.12) + (phase * 1.3)) * (amplitude * 0.75);
+      const y = midY + Math.sin((x * 0.12) + (phase * 1.3)) * (amplitude * 0.78);
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
@@ -53,7 +49,7 @@ function initSineWaveCanvas() {
 
     // Layer 2: Cyan Sine Wave (Front layer)
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.96)';
     ctx.lineWidth = 1.6;
     for (let x = 0; x <= width; x++) {
       const y = midY + Math.sin((x * 0.15) + phase) * amplitude;
@@ -62,116 +58,242 @@ function initSineWaveCanvas() {
     }
     ctx.stroke();
 
-    phase += 0.08;
-    animationFrameId = requestAnimationFrame(renderWave);
+    phase += 0.085;
+    requestAnimationFrame(renderWave);
   }
 
   renderWave();
 
-  // Pulse wave amplitude when typing
-  window.triggerWavePulse = function() {
-    targetAmplitude = 7.5;
+  window.triggerWavePulse = function(boost = 7.8, durationMs = 320) {
+    targetAmplitude = boost;
     setTimeout(() => {
       targetAmplitude = 4.5;
-    }, 280);
+    }, durationMs);
   };
 }
 
 /* ==============================================================================
-   2. Interactive Live Typing Demo & 3-Tier Suggestion Engine
+   2. Interactive Live Typing, Voice Dictation & 3-Tier Suggestion Engine
    ============================================================================== */
 function initInteractiveDemo() {
   const input = document.getElementById('demoInput');
+  const editorBox = document.getElementById('demoEditorBox');
+  const scenarioHint = document.getElementById('demoScenarioHint');
+  const shimmerToast = document.getElementById('shimmerToast');
+  const voiceSimBtn = document.getElementById('simulateVoiceBtn');
   const hudContainer = document.getElementById('simulatedHud');
   const chipContainer = document.getElementById('hudChips');
   const statusLabel = document.getElementById('hudStatus');
-  const presetButtons = document.querySelectorAll('.preset-btn');
+  const presetButtons = document.querySelectorAll('.preset-btn[data-preset]');
   const modeBadge = document.getElementById('hudMode');
 
   if (!input || !chipContainer) return;
 
-  // Corpus database for demo suggestions
   const demoScenarios = {
+    'voice_ai': {
+      hint: '💡 Nỗi đau #03: Đọc giọng nói tự nhiên có nhịp nghỉ 2.2s → Tự điền vào ô text → Nhấn Tab-Tab để AI chuốt lại văn nói lủng củng.',
+      text: 'Hình như là sau khi anh nhận diện cái phần giọng nói sang nhưng mà đúng ra đến có 1 thao tác AI',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI',
+        fullText: 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI.',
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: '…giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại.',
+        fullText: 'Sau khi nhận diện giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại.',
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'tức thì',
+        fullText: 'Sau khi nhận diện giọng nói sang text, đúng ra cần có một thao tác AI biên tập lại tức thì.',
+        kind: 'predict'
+      },
+      status: '🎙️ Voice → ✨ AI'
+    },
+    'long_sentence': {
+      hint: '💡 Nỗi đau #02: Viết đoạn văn rất dài, có dấu chấm ngắt câu và nghỉ nhịp suy nghĩ — VFlow vẫn giữ trọn ngữ cảnh và thu gọn hiển thị thông minh.',
+      text: 'hom nay toi da danh rat nhieu thoi gian de kiem tra he thong goi y cau dai tren macos. khi nguoi dung nghi mot lat roi go tiep',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: '…khi người dùng nghỉ một lát rồi gõ tiếp',
+        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp',
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: '…Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh.',
+        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh.',
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'mượt mà',
+        fullText: 'Hôm nay tôi đã dành rất nhiều thời gian để kiểm tra hệ thống gợi ý câu dài trên macOS. Khi người dùng nghỉ một lát rồi gõ tiếp, hệ thống vẫn giữ trọn ngữ cảnh mượt mà.',
+        kind: 'predict'
+      },
+      status: '🧠 Full Context'
+    },
+    'en_grammar': {
+      hint: '💡 Nỗi đau #04: Gõ nhanh tiếng Anh bị sai chia động từ ("she dont know", "i goes") — Tầng 2 ✨ tự động phát hiện và sửa ngữ pháp.',
+      text: 'she dont know how to fix this issue and i goes to check the server log',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: "She doesn't know how to fix this issue",
+        fullText: "She doesn't know how to fix this issue and I go to check the server log",
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: "She doesn't know how to fix this issue, so I went to check the server logs.",
+        fullText: "She doesn't know how to fix this issue, so I went to check the server logs.",
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'immediately',
+        fullText: "She doesn't know how to fix this issue, so I went to check the server logs immediately.",
+        kind: 'predict'
+      },
+      status: '🇬🇧 EN Grammar'
+    },
     'to dang lam viec': {
-      text: 'to dang lam viec',
-      t1: { key: '⇥', icon: '⚡', text: 'tôi đang làm việc', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'Tôi đang làm việc rất hiệu quả.', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: 'hôm nay', kind: 'predict' },
-      status: '✨ AI Polish'
+      hint: '💡 Nỗi đau #04: Lỗi chính tả theo ngữ cảnh tiếng Việt ("to đang" → "tôi đang", "không cau" → "không dấu") mà bộ kiểm tra từ đơn bó tay.',
+      text: 'to dang lam viec tren may mac nhung go nhanh hay bi khong cau',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: 'tôi đang làm việc trên máy Mac nhưng gõ nhanh hay bị không dấu',
+        fullText: 'tôi đang làm việc trên máy Mac nhưng gõ nhanh hay bị không dấu',
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu.',
+        fullText: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu.',
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'tiếng Việt',
+        fullText: 'Tôi đang làm việc trên máy Mac nhưng khi gõ nhanh thường bị mất dấu tiếng Việt.',
+        kind: 'predict'
+      },
+      status: '🇻🇳 VI Context'
     },
     'ary': {
-      text: 'salary dictionary secondary',
-      t1: { key: '⇥', icon: '⚡', text: 'salary', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'English Escape: "ary" preserved', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: 'increase', kind: 'predict' },
-      status: '🛡️ EN Auto-Escape'
-    },
-    'thuong thuyet': {
-      text: 'thuong thuyet',
-      t1: { key: '⇥', icon: '⚡', text: 'thương thuyết', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'tiến hành thương thuyết', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: 'với đối tác', kind: 'predict' },
-      status: '✨ Suggestion'
+      hint: '💡 Nỗi đau #01: Đang bật bộ gõ tiếng Việt nhưng gõ tiếng Anh & biến code ("salary", "arrow", "service", "subclass") không bị nhảy dấu.',
+      text: 'const salary = calculateArrow(service, subclass, currentError);',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: 'const salary = calculateArrow(service, subclass, currentError);',
+        fullText: 'const salary = calculateArrow(service, subclass, currentError);',
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: 'English & Code Auto-Escape: Bảo toàn 100% không nhảy dấu',
+        fullText: 'const salary = calculateArrow(service, subclass, currentError);',
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'return salary;',
+        fullText: 'const salary = calculateArrow(service, subclass, currentError);\nreturn salary;',
+        kind: 'predict'
+      },
+      status: '🛡️ Auto-Escape'
     },
     'ko sao ca': {
-      text: 'ko sao ca',
-      t1: { key: '⇥', icon: '⚡', text: 'không sao cả', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'Dạ không sao cả ạ!', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: 'đâu bạn nhé', kind: 'predict' },
+      hint: '💡 Gõ tắt tốc độ cao: Tự động bung các từ viết tắt thông dụng ("ko", "dc", "trc", "mn", "ntn") thành câu lịch sự, đầy đủ dấu.',
+      text: 'ko sao dc ma trc gio mn van dung ntn',
+      t1: {
+        key: '⇥',
+        icon: '⚡',
+        label: 'không sao được mà trước giờ mọi người vẫn dùng như thế nào',
+        fullText: 'không sao được mà trước giờ mọi người vẫn dùng như thế nào',
+        kind: 'diacritic'
+      },
+      t2: {
+        key: '⇥⇥',
+        icon: '✨',
+        label: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà.',
+        fullText: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà.',
+        kind: 'polish'
+      },
+      t3: {
+        key: '⌥3',
+        icon: '🔮',
+        label: 'bạn nhé',
+        fullText: 'Không sao đâu ạ, trước giờ mọi người vẫn sử dụng như vậy mà bạn nhé.',
+        kind: 'predict'
+      },
       status: '⚡ Teencode'
-    },
-    'vieest dduocj': {
-      text: 'vieest dduocj',
-      t1: { key: '⇥', icon: '⚡', text: 'viết được', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'viết được tiếng Việt', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: 'dễ dàng', kind: 'predict' },
-      status: '⚡ Free-Order'
-    },
-    'subclass': {
-      text: 'class Point extends Node',
-      t1: { key: '⇥', icon: '⚡', text: 'class Point', kind: 'diacritic' },
-      t2: { key: '⌥2', icon: '✨', text: 'Code keyword: zero conflict', kind: 'polish' },
-      t3: { key: '⌥3', icon: '🔮', text: '{ constructor }', kind: 'predict' },
-      status: '🛡️ Dev Mode'
     }
   };
 
   let currentSuggestions = [];
+  let lastTabTime = 0;
+  let voiceInterval = null;
 
-  function updateSuggestions(rawText) {
+  function smartEllipsis(str, maxLen = 58) {
+    if (!str || str.length <= maxLen) return str;
+    return '…' + str.slice(-(maxLen - 1)).trimStart();
+  }
+
+  function updateSuggestions(rawText, forcedScenarioKey = null) {
     if (window.triggerWavePulse) window.triggerWavePulse();
 
     const trimmed = rawText.trim().toLowerCase();
+    let matched = forcedScenarioKey ? demoScenarios[forcedScenarioKey] : null;
 
-    // Check if matching any pre-built scenario
-    let matched = null;
-    if (trimmed.includes('to dang') || trimmed.includes('tooi dang') || trimmed === 'to' || trimmed === 'to dang lam viec') {
-      matched = demoScenarios['to dang lam viec'];
-    } else if (trimmed.includes('ary') || trimmed.includes('salary')) {
-      matched = demoScenarios['ary'];
-    } else if (trimmed.includes('thuong thuyet') || trimmed.includes('thuong')) {
-      matched = demoScenarios['thuong thuyet'];
-    } else if (trimmed.includes('ko sao') || trimmed.includes('ko') || trimmed.includes('dc')) {
-      matched = demoScenarios['ko sao ca'];
-    } else if (trimmed.includes('vieest') || trimmed.includes('dduocj')) {
-      matched = demoScenarios['vieest dduocj'];
-    } else if (trimmed.includes('class') || trimmed.includes('subclass') || trimmed.includes('const')) {
-      matched = demoScenarios['subclass'];
-    } else if (trimmed.length > 0) {
-      // Dynamic fallback based on words
-      matched = {
-        text: rawText,
-        t1: { key: '⇥', icon: '⚡', text: autoDiacriticMock(rawText), kind: 'diacritic' },
-        t2: { key: '⌥2', icon: '✨', text: polishMock(rawText), kind: 'polish' },
-        t3: { key: '⌥3', icon: '🔮', text: 'tiếp tục...', kind: 'predict' },
-        status: '⚡ Realtime'
-      };
+    if (!matched) {
+      if (trimmed.includes('nhận diện') || trimmed.includes('giọng nói') || trimmed.includes('thao tác ai')) {
+        matched = demoScenarios['voice_ai'];
+      } else if (trimmed.includes('danh rat nhieu') || trimmed.includes('nghi mot lat') || trimmed.length > 85) {
+        matched = demoScenarios['long_sentence'];
+      } else if (trimmed.includes('she dont') || trimmed.includes('i goes') || trimmed.includes('dont know')) {
+        matched = demoScenarios['en_grammar'];
+      } else if (trimmed.includes('to dang') || trimmed.includes('khong cau')) {
+        matched = demoScenarios['to dang lam viec'];
+      } else if (trimmed.includes('salary') || trimmed.includes('calculatearrow') || trimmed.includes('subclass')) {
+        matched = demoScenarios['ary'];
+      } else if (trimmed.includes('ko sao') || trimmed.includes('trc gio') || trimmed.includes('ntn')) {
+        matched = demoScenarios['ko sao ca'];
+      } else if (trimmed.length > 0) {
+        const diacritics = autoDiacriticMock(rawText);
+        const polished = polishMock(rawText);
+        matched = {
+          hint: '💡 Đang phân tích trực tiếp câu bạn vừa gõ (Nhấn Tab-Tab để áp dụng ✨ AI Polish).',
+          text: rawText,
+          t1: { key: '⇥', icon: '⚡', label: smartEllipsis(diacritics), fullText: diacritics, kind: 'diacritic' },
+          t2: { key: '⇥⇥', icon: '✨', label: smartEllipsis(polished), fullText: polished, kind: 'polish' },
+          t3: { key: '⌥3', icon: '🔮', label: 'tiếp tục...', fullText: polished + ' ', kind: 'predict' },
+          status: '⚡ Realtime'
+        };
+      }
     }
 
     if (!matched || trimmed.length === 0) {
       chipContainer.innerHTML = `
         <span style="font-size: 12px; color: #94a3b8; font-style: italic;">
-          Gõ văn bản để xem gợi ý tức thì...
+          Gõ văn bản hoặc bấm nút 🎙️ để xem gợi ý 3 tầng tức thì...
         </span>
       `;
       if (statusLabel) statusLabel.textContent = 'Ready';
@@ -179,74 +301,108 @@ function initInteractiveDemo() {
       return;
     }
 
+    if (scenarioHint && matched.hint) {
+      scenarioHint.textContent = matched.hint;
+    }
+
     currentSuggestions = [matched.t1, matched.t2, matched.t3];
 
-    // Render chips
     chipContainer.innerHTML = '';
     currentSuggestions.forEach((item, index) => {
       const chip = document.createElement('div');
       chip.className = `hud-chip tier-${index + 1}`;
+      chip.title = `Click để thay thế bằng: "${item.fullText}"`;
       chip.innerHTML = `
         <span class="chip-key">${item.key}</span>
         <span>${item.icon}</span>
-        <span>${item.text}</span>
+        <span>${item.label}</span>
       `;
-      chip.addEventListener('click', () => applySuggestion(item));
+      chip.addEventListener('click', () => applySuggestion(item, index === 1));
       chipContainer.appendChild(chip);
     });
 
     if (statusLabel) statusLabel.textContent = matched.status;
   }
 
-  function applySuggestion(item) {
+  function applySuggestion(item, withShimmer = false) {
     if (!item) return;
-    input.value = item.text;
-    if (window.triggerWavePulse) window.triggerWavePulse();
 
-    // Visual feedback
+    if (withShimmer && editorBox && shimmerToast) {
+      editorBox.classList.add('shimmer-active');
+      shimmerToast.classList.add('visible');
+      if (window.triggerWavePulse) window.triggerWavePulse(9.5, 500);
+
+      setTimeout(() => {
+        input.value = item.fullText;
+        editorBox.classList.remove('shimmer-active');
+        shimmerToast.classList.remove('visible');
+        showAppliedStatus();
+      }, 420);
+      return;
+    }
+
+    input.value = item.fullText;
+    if (window.triggerWavePulse) window.triggerWavePulse();
+    showAppliedStatus();
+  }
+
+  function showAppliedStatus() {
     if (statusLabel) {
       const orig = statusLabel.textContent;
-      statusLabel.textContent = '✓ Đã điền';
+      statusLabel.textContent = '✓ Đã thay thế';
       statusLabel.style.color = '#34d399';
       setTimeout(() => {
         statusLabel.textContent = orig;
         statusLabel.style.color = '#7dd3fc';
-      }, 1200);
+      }, 1300);
     }
-
-    updateSuggestions(input.value);
   }
 
   function autoDiacriticMock(str) {
     const map = {
       'ko': 'không', 'dc': 'được', 'trc': 'trước', 'ntn': 'như thế nào',
-      'mn': 'mọi người', 'to': 'tôi', 'dang': 'đang', 'lam': 'làm', 'viec': 'việc',
+      'mn': 'mọi người', 'to': 'tôi', 'toi': 'tôi', 'dang': 'đang', 'lam': 'làm', 'viec': 'việc',
       'thuong': 'thương', 'thuyet': 'thuyết', 'viet': 'Việt', 'nam': 'Nam',
-      'rat': 'rất', 'tot': 'tốt', 'chuan': 'chuẩn', 'hoa': 'hòa'
+      'rat': 'rất', 'tot': 'tốt', 'chuan': 'chuẩn', 'hom': 'hôm', 'nay': 'nay',
+      'khong': 'không', 'cau': 'dấu', 'dont': "doesn't", 'goes': 'went'
     };
     return str.split(' ').map(w => map[w.toLowerCase()] || w).join(' ');
   }
 
   function polishMock(str) {
-    const diacritics = autoDiacriticMock(str);
-    if (!diacritics.endsWith('.')) {
-      return diacritics.charAt(0).toUpperCase() + diacritics.slice(1) + '.';
-    }
-    return diacritics;
+    let cleaned = autoDiacriticMock(str)
+      .replace(/hình như là\s+/gi, '')
+      .replace(/cái phần\s+/gi, '')
+      .replace(/nhưng mà\s+/gi, 'nhưng ')
+      .trim();
+    if (!cleaned) return str;
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    if (!/[.!?]$/.test(cleaned)) cleaned += '.';
+    return cleaned;
   }
 
-  // Keyboard shortcut handler in editor
+  // Keyboard shortcut handler in editor (supports Tab and Double-Tab / Tab-Tab)
   input.addEventListener('keydown', (e) => {
-    // Tab or Option+1 / Alt+1 -> Select Tier 1
-    if ((e.key === 'Tab' || (e.altKey && e.key === '1')) && currentSuggestions.length >= 1) {
+    if (e.key === 'Tab' && currentSuggestions.length >= 2) {
       e.preventDefault();
-      applySuggestion(currentSuggestions[0]);
+      const now = performance.now();
+      if (now - lastTabTime < 450) {
+        // Tab-Tab -> Tier 2 AI Polish with Shimmer Sweep!
+        lastTabTime = 0;
+        applySuggestion(currentSuggestions[1], true);
+      } else {
+        lastTabTime = now;
+        applySuggestion(currentSuggestions[0], false);
+      }
+    } else if (e.altKey && e.key === '1' && currentSuggestions.length >= 1) {
+      e.preventDefault();
+      applySuggestion(currentSuggestions[0], false);
     } else if (e.altKey && e.key === '2' && currentSuggestions.length >= 2) {
       e.preventDefault();
-      applySuggestion(currentSuggestions[1]);
+      applySuggestion(currentSuggestions[1], true);
     } else if (e.altKey && e.key === '3' && currentSuggestions.length >= 3) {
       e.preventDefault();
-      applySuggestion(currentSuggestions[2]);
+      applySuggestion(currentSuggestions[2], false);
     } else if (e.key === 'Escape') {
       hudContainer.style.opacity = hudContainer.style.opacity === '0' ? '1' : '0';
     }
@@ -259,6 +415,15 @@ function initInteractiveDemo() {
   // Preset buttons
   presetButtons.forEach(btn => {
     btn.addEventListener('click', () => {
+      if (voiceInterval) {
+        clearInterval(voiceInterval);
+        voiceInterval = null;
+        if (voiceSimBtn) {
+          voiceSimBtn.classList.remove('recording');
+          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói (⌥Space)</span>';
+        }
+      }
+
       presetButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
@@ -266,10 +431,58 @@ function initInteractiveDemo() {
       const scenario = demoScenarios[scenarioKey];
       if (scenario) {
         input.value = scenario.text;
-        updateSuggestions(scenario.text);
+        updateSuggestions(scenario.text, scenarioKey);
       }
     });
   });
+
+  // Simulated Voice Dictation Button
+  if (voiceSimBtn) {
+    voiceSimBtn.addEventListener('click', () => {
+      if (voiceInterval) {
+        clearInterval(voiceInterval);
+        voiceInterval = null;
+      }
+
+      presetButtons.forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-preset') === 'voice_ai');
+      });
+
+      const spokenChunks = [
+        'Hình như là',
+        'Hình như là sau khi anh nhận diện',
+        'Hình như là sau khi anh nhận diện cái phần giọng nói sang',
+        'Hình như là sau khi anh nhận diện cái phần giọng nói sang… (nghỉ 1s nghĩ từ tiếng Anh)',
+        'Hình như là sau khi anh nhận diện cái phần giọng nói sang nhưng mà đúng ra đến có 1 thao tác AI'
+      ];
+
+      let step = 0;
+      input.value = '';
+      voiceSimBtn.classList.add('recording');
+      voiceSimBtn.innerHTML = '<span>🔴 Đang nghe (Chờ ngắt nói 2.2s)...</span>';
+      if (statusLabel) {
+        statusLabel.textContent = '🎙️ Listening...';
+        statusLabel.style.color = '#f87171';
+      }
+
+      voiceInterval = setInterval(() => {
+        if (window.triggerWavePulse) window.triggerWavePulse(9.0, 260);
+        if (step < spokenChunks.length) {
+          input.value = spokenChunks[step];
+          step++;
+        } else {
+          clearInterval(voiceInterval);
+          voiceInterval = null;
+          voiceSimBtn.classList.remove('recording');
+          voiceSimBtn.innerHTML = '<span>🎙️ Thử đọc giọng nói (⌥Space)</span>';
+          if (statusLabel) statusLabel.style.color = '#7dd3fc';
+          // Auto-fill normalized transcript & present ✨ AI Polish chip
+          input.value = 'Sau khi nhận diện cái phần giọng nói sang text nhưng mà đúng ra cần có 1 thao tác AI.';
+          updateSuggestions(input.value, 'voice_ai');
+        }
+      }, 420);
+    });
+  }
 
   // Mode badge click in HUD
   if (modeBadge) {
@@ -288,11 +501,11 @@ function initInteractiveDemo() {
     });
   }
 
-  // Initial populate with default scenario
-  const defaultScenario = demoScenarios['to dang lam viec'];
+  // Initial populate with default voice_ai scenario
+  const defaultScenario = demoScenarios['voice_ai'];
   if (defaultScenario) {
     input.value = defaultScenario.text;
-    updateSuggestions(defaultScenario.text);
+    updateSuggestions(defaultScenario.text, 'voice_ai');
   }
 }
 
@@ -335,7 +548,7 @@ function initCopyButtons() {
         const textToCopy = targetElement.textContent.trim();
         navigator.clipboard.writeText(textToCopy).then(() => {
           const originalText = btn.textContent;
-          btn.textContent = 'Copied!';
+          btn.textContent = 'Đã sao chép!';
           btn.style.color = '#34d399';
           setTimeout(() => {
             btn.textContent = originalText;

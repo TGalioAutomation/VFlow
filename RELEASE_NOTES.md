@@ -4,15 +4,22 @@
 **Version:** `1.0.0` (Build 1)  
 **Target Platform:** macOS 14.0+ (Sonoma, Sequoia, Tahoe) — Apple Silicon (`arm64`)  
 **Repository:** [https://github.com/TGalioAutomation/VFlow](https://github.com/TGalioAutomation/VFlow)  
-**Official Release:** [https://github.com/TGalioAutomation/VFlow/releases/tag/v1.0.0](https://github.com/TGalioAutomation/VFlow/releases/tag/v1.0.0)
+**Official Release:** [https://github.com/TGalioAutomation/VFlow/releases/tag/v1.0.0](https://github.com/TGalioAutomation/VFlow/releases/tag/v1.0.0)  
+**Website:** [https://tgalioautomation.github.io/VFlow/](https://tgalioautomation.github.io/VFlow/)
 
 ---
 
-## 🚀 Executive Summary
+## 🚀 Executive Summary — Solving Real macOS Typing & Dictation Pain Points
 
-We are thrilled to announce the general availability of **VFlow v1.0.0**, the flagship native macOS bilingual Vietnamese-English typing engine, context-aware 3-tier suggestion assistant, and push-to-talk voice dictation platform.
+We are thrilled to announce **VFlow v1.0.0**, the flagship native macOS bilingual Vietnamese-English typing engine, context-aware 3-tier suggestion & grammar assistant, and voice-to-AI polish dictation platform.
 
-Designed from the ground up in **Swift 6** exclusively for Apple Silicon, VFlow eliminates the age-old frustrations of Vietnamese typing on macOS: diacritic conflicts with English words, key swallowing in browsers, lagging UI, and intrusive cloud telemetry. VFlow operates with sub-2-millisecond latency, zero third-party dependencies, an ultra-smooth 120fps live Caret HUD pill, and a 100% on-device AI architecture.
+Built from the ground up in **Swift 6** exclusively for Apple Silicon, VFlow directly solves the 6 biggest daily frustrations of Vietnamese-English macOS users:
+1. **No More Accidental Diacritics on English & Code**: Type `salary`, `arrow`, `error`, `service`, `class`, `subclass` seamlessly without switching input sources, or double-tap (`rr`, `ss`, `ff`) to restore raw English characters instantly.
+2. **Full-Sentence Context Across Pauses & Punctuation**: Write long paragraphs, pause to think, or type `.` — VFlow retains full sentence context and smartly truncates long previews (`…`) on the Caret Pill.
+3. **Voice Dictation (`⌥Space`) → Instant Auto-Fill → `Tab-Tab` AI Polish**: Speak naturally with a `2.2s` smart silence watchdog that never cuts you off mid-thought, automatically fills the focused text field (including Chrome & Electron apps), and presents a `✨` AI Polish chip on the Caret Pill so you can press `Tab-Tab` to turn spoken rambling into crisp written prose.
+4. **Bilingual Vietnamese & English Grammar Checking**: Catches English subject-verb/auxiliary errors (`"she dont know"` → `"She doesn't know."`, `"i goes"` → `"I went"`) alongside contextual Vietnamese typos (`"to đang"` → `"tôi đang"`, `"không cau"` → `"không dấu"`).
+5. **Zero Unwanted Popups in Browsers & 100% Reliable Text Replacement**: Deep Accessibility tree verification (`AXEditableAncestor`) ensures the Caret Pill **only** appears inside genuine editable text inputs, while hybrid `CGEvent` + `AXValue` replacement with a **Violet-Cyan Shimmer Sweep** works reliably everywhere.
+6. **100% On-Device Privacy (`0 KB` Cloud)**: Sub-2ms latency on Apple Silicon Neural Engine with zero cloud network calls and zero third-party dependencies.
 
 ---
 
@@ -20,8 +27,8 @@ Designed from the ground up in **Swift 6** exclusively for Apple Silicon, VFlow 
 
 | Package Name | Architecture | File Size | Direct Download Link |
 |---|---|---|---|
-| **VFlow-v1.0.0-macOS-arm64.dmg** | Apple Silicon (`arm64`) | ~4.7 MB | [Download DMG](https://github.com/TGalioAutomation/VFlow/releases/download/v1.0.0/VFlow-v1.0.0-macOS-arm64.dmg) |
-| **VFlow-v1.0.0-macOS-arm64.zip** | Apple Silicon (`arm64`) | ~4.2 MB | [Download ZIP](https://github.com/TGalioAutomation/VFlow/releases/download/v1.0.0/VFlow-v1.0.0-macOS-arm64.zip) |
+| **VFlow-v1.0.0-macOS-arm64.dmg** | Apple Silicon (`arm64`) | ~4.6 MB | [Download DMG](https://github.com/TGalioAutomation/VFlow/releases/download/v1.0.0/VFlow-v1.0.0-macOS-arm64.dmg) |
+| **VFlow-v1.0.0-macOS-arm64.zip** | Apple Silicon (`arm64`) | ~4.3 MB | [Download ZIP](https://github.com/TGalioAutomation/VFlow/releases/download/v1.0.0/VFlow-v1.0.0-macOS-arm64.zip) |
 | **SHA256SUMS.txt** | All Packages | 190 B | [Download Checksums](https://github.com/TGalioAutomation/VFlow/releases/download/v1.0.0/SHA256SUMS.txt) |
 
 ---
@@ -44,101 +51,46 @@ shasum -a 256 -c SHA256SUMS.txt
 
 ### Verified SHA-256 Checksums
 ```text
-e4fa6e44f0a62b30e416b96ca8c19c4aaad5dcfac01bc3e6290b16d1d0c251e7  VFlow-v1.0.0-macOS-arm64.dmg
-4aac3a5d92122055ba1fe5bebfd63adca84aab173bdbff3a1cc6d4d3922f2038  VFlow-v1.0.0-macOS-arm64.zip
+83ce6624e6f8da011d4c681a3fe59a94d94f06c85ad2f4211d8f811768065c27  VFlow-v1.0.0-macOS-arm64.dmg
+6c69b4a5cb8ff4aa67be66fe686889fb074afc8ade9f0c105e6488ca0b3e02cc  VFlow-v1.0.0-macOS-arm64.zip
 ```
 
 ---
 
-## 🌟 What's New in v1.0.0
+## 🌟 Key Capabilities in v1.0.0
 
 ### 1. Bilingual Auto-Escape Engine (`VFlowCore`)
-- **Smart English Collision Prevention**: No more mangled code or accidental diacritics. Words like `ary` (`salary`), `arrow`, `error`, `carry`, `sorry`, `current`, `class`, `subclass`, `import`, `service`, `const`, `diff`, `off` are automatically detected and preserved.
+- **Smart English Collision Prevention**: Words like `ary` (`salary`), `arrow`, `error`, `carry`, `sorry`, `current`, `class`, `subclass`, `import`, `service`, `const`, `diff`, `off` are automatically detected and preserved.
+- **UniKey-Style Double-Tap Restore**: Double-tapping tone keys (`rr`, `ss`, `ff`, `jj`, `xx`) immediately reverts accidental tone marks back to raw English characters.
 - **Full Telex & VNI Modes**: High-precision finite state machine supporting both Telex and VNI input conventions with instant mode toggling (`⌥Z`).
-- **Free-Order Keystroke Tone Placement**: Type tones anywhere in the word (`vieest` or `toasn`); VFlow normalizes the diacritics correctly without false reversion.
-- **Orthographic Accuracy**: Strict implementation of Vietnamese vowel and tone placement laws (e.g. `thuở`, `huơ`, `khuỷu`, `quyết`, `toán`).
-- **Instant Tone Removal**: Clear tone marks instantly with `z` (Telex) or `0` (VNI) even after backspacing into a word.
+- **Free-Order Keystroke Tone Placement**: Type tones anywhere in the word (`vieest` or `toasn`); VFlow normalizes the diacritics accurately.
 
-### 2. 3-Tier Contextual Suggestion HUD (`VFlowUI`)
-- **`⚡` Tier 1: Instant Diacritics & Teencode Shorthand**:
-  - Restores full accents on unsigned words on word boundary.
-  - Automatically expands abbreviations: `ko` → `không`, `dc`/`đc` → `được`, `trc` → `trước`, `ntn` → `như thế nào`, `mn` → `mọi người`.
-  - Accept with `⇥ Tab` or `⌥1`.
-- **`✨` Tier 2: On-Device AI Typo & Grammar Polish**:
-  - Contextual typo resolution: detects pronouns before verbs (`"to đang"` → `"tôi đang"`), fixes bigram typo pairs (`"không cau"` → `"không dấu"`, `"thaat sư"` → `"thật sự"`).
-  - Cleans verbal filler words (*"à"*, *"ừm"*, *"thì là mà"*).
-  - Style re-phrasing across 3 tones: **Natural**, **Polite**, and **Concise**.
-  - Accept with `⌥2`.
-- **`🔮` Tier 3: Next-Word Prediction**:
-  - N-gram Vietnamese collocation prediction anticipating your next thought.
-  - Accept with `⌥3`.
+### 2. 3-Tier Contextual Suggestion & Bilingual Grammar HUD (`VFlowUI`)
+- **`⚡` Tier 1: Instant Diacritics & Teencode Shorthand** (`⇥ Tab` or `⌥1`):
+  - Restores full accents on unsigned words and expands abbreviations (`ko` → `không`, `dc`/`đc` → `được`, `trc` → `trước`, `ntn` → `như thế nào`, `mn` → `mọi người`).
+- **`✨` Tier 2: On-Device AI Polish & Bilingual Grammar** (`⇥⇥ Tab-Tab` or `⌥2`):
+  - Full-sentence Vietnamese & English grammar correction, contextual pronoun/verb disambiguation, spoken filler removal, and style re-phrasing across **Natural**, **Polite**, and **Concise** tones.
+  - Visual **Tab-Tab Shimmer Sweep** feedback during sentence replacement.
+- **`🔮` Tier 3: Next-Word Prediction** (`⌥3`):
+  - Context-aware N-gram and neural next-word prediction without duplicate word echoing.
 
-### 3. 🫧 120fps Floating Caret HUD (Prototype v8 Liquid Glass)
-- **Ultra-low latency AppKit floating panel**: Height `40px`, non-activating (`.nonActivatingPanel`), zero focus-stealing.
-- **Smooth 120fps Silk Sine-Wave Canvas**: Real-time rendering of two-layer Cyan (`#38BDF8`) & Violet (`#A855F7`) silk wave.
-- **Smart Cursor Tethering**: Follows caret bounds across all macOS applications via Accessibility APIs with dynamic multi-display clamping and automatic screen-edge flipping.
+### 3. 🎙️ Push-to-Talk & Tap-to-Talk Voice Dictation + AI Polish (`⌥Space`)
+- **Smart `2.2s` Silence Watchdog**: Automatically finalizes speech after a natural `2.2s` pause while monitoring live audio energy so you are never cut off while thinking of English technical terms.
+- **Guaranteed Auto-Fill**: Injects recognized text into any focused input field via `CGEvent` with automatic `55ms` `AccessibilityBridge` fallback for Electron/Web apps.
+- **Post-Dictation `✨` AI Polish**: Immediately displays a refined written version of your spoken sentence on the Caret Pill — press `Tab-Tab` or click the `✨` chip to replace raw speech with polished prose.
 
-### 4. 🎙️ Push-to-Talk Voice Dictation (`⌥Space`)
-- **Hold-to-Talk / Tap-to-Talk**: Press and hold `⌥Space` to dictate text in Vietnamese.
-- **Streaming Live Transcription**: Powered by native `SFSpeechRecognizer` with real-time waveform feedback.
-- **Intelligent Speech Cleanup**: Automatically trims filler pauses, normalizes capitalization, and injects directly into the target application.
-
-### 5. 🎛️ Bento Control Center & Retina Menu Bar
-- **Retina Menu Bar Capsule Badge**: Live indicator (`[• VI·T]`, `[• VI·V]`, `[• EN]`).
-- **Bento Settings Window**: 4 organized panels for Dashboard statistics, Input & custom macros, AI Model Hub, and HUD visual configuration.
-- **Interactive Live Sandbox**: In-app test area to try out typing, suggestions, and tone transformations before daily use.
-
-### 6. 🛡️ 100% On-Device Privacy Architecture
-- **Zero Cloud Network Calls**: No outbound network requests are made. Everything executes locally on your Apple Silicon chip.
-- **Zero Third-Party Dependencies**: Pure native Swift codebase (`dependencies: []` in `Package.swift`).
-- **Memory-Only Processing**: Keystrokes are evaluated in volatile memory and never logged to disk or external analytics.
-
----
-
-## 🛠️ System Compatibility & Hardware Requirements
-
-- **Supported macOS Versions**:
-  - macOS 15.0+ (Sequoia / Tahoe)
-  - macOS 14.0+ (Sonoma)
-- **Supported Architecture**:
-  - Apple Silicon (`arm64`): M1, M2, M3, M4 and their Pro, Max, and Ultra variants.
-- **Xcode & Swift Compatibility**:
-  - Swift 6.0+ / Xcode 15.0+ / 16.0+
-
----
-
-## 📋 Installation & Permissions Walkthrough
-
-1. **Mount & Install**:
-   - Double-click `VFlow-v1.0.0-macOS-arm64.dmg`.
-   - Drag **VFlow** into `/Applications`.
-2. **First Launch**:
-   - Launch **VFlow** from `/Applications` or Spotlight (`⌘Space` → "VFlow").
-   - Click **Open** if prompted by macOS Gatekeeper.
-3. **Grant Required Permissions**:
-   - **Accessibility**: Required for tracking text cursor coordinates and text injection. Open **System Settings** → **Privacy & Security** → **Accessibility** and enable **VFlow**.
-   - **Input Monitoring**: Required for global keystroke interception via `CGEventTap`. Open **System Settings** → **Privacy & Security** → **Input Monitoring** and enable **VFlow**.
-   - **Microphone & Speech Recognition**: Required only if using Push-to-Talk voice dictation (`⌥Space`). Prompted on first use.
+### 4. 🫧 120fps Floating Caret HUD & Deep Focus Verification
+- **Strict Editable Focus Guard**: Traverses `AXEditableAncestor` / `AXTextMarker` attributes so the HUD never pops up while passively browsing web pages in Chrome or Safari.
+- **Smart Head-Tail Ellipsis**: Long sentences are cleanly formatted (`…`) within a `680pt` dynamic ceiling without overflowing screen bounds.
 
 ---
 
 ## 🧪 Forensic Quality & Verification Audit
 
-The v1.0.0 release has undergone two comprehensive multi-agent bug discovery and adversarial remediation rounds:
-- **171 Automated Tests Passing**: Unit, integration, boundary, and adversarial stress suites in `Tests/VFlowTests/` pass 100% with zero failures.
-- **Swift 6 Concurrency Verified**: Zero data race warnings or concurrency violations under `@MainActor` and `NSLock` thread synchronization.
+- **178/178 Automated Tests Passing**: Unit, integration, bilingual grammar, voice silence watchdog, and focus verification suites in `Tests/VFlowTests/` pass 100% with zero failures.
+- **Swift 6 Concurrency Verified**: Zero data race warnings or concurrency violations under `@MainActor` and `NSLock`.
 - **Clean-Room 3-Mutant Protocol**: 100% mutant kill rate across all adversarial mutations.
 - **Code Signature**: Signed with deep strict compliance (`codesign --verify --deep --strict --verbose=2`).
-- **Linker Inspection**: `otool -L` confirms zero third-party or local user dynamic library references.
-
----
-
-## 🙏 Acknowledgements
-
-We express our gratitude to the Vietnamese developer community, modern macOS open-source tool authors, and the automated AI testing frameworks that helped subject VFlow to rigorous adversarial stress testing.
-
-For bug reports, feature suggestions, or source code contributions, please visit our GitHub repository:  
-[https://github.com/TGalioAutomation/VFlow](https://github.com/TGalioAutomation/VFlow)
 
 ---
 *VFlow Team — October 2026*

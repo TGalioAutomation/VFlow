@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VFlow — Bilingual Typing, Reimagined for macOS</title>
-  <meta name="description" content="Next-generation native macOS bilingual Vietnamese-English input engine, 3-tier contextual suggestion HUD, and push-to-talk voice dictation assistant for Apple Silicon.">
+  <title>VFlow — Chấm dứt nỗi ám ảnh nhảy dấu, nuốt chữ &amp; sửa văn nói trên macOS</title>
+  <meta name="description" content="Bộ gõ song ngữ Anh-Việt thế hệ mới cho macOS: tự động chống nhảy dấu khi gõ tiếng Anh &amp; code, giữ ngữ cảnh câu dài, sửa ngữ pháp Anh-Việt và biên tập giọng nói bằng AI On-Device ngay tại con trỏ.">
   <link rel="icon" type="image/png" href="assets/app_icon_nobg.png">
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -16,14 +16,15 @@
   <div class="navbar-wrapper">
     <nav class="navbar">
       <div class="nav-brand">
-        <img src="assets/app_icon_nobg.png" alt="VFlow Icon" class="nav-logo">
+        <img src="assets/app_icon_nobg.png" alt="VFlow Icon" class="nav-logo" width="32" height="32">
         <span class="nav-title">VFlow</span>
         <button id="menuBarBadge" class="nav-menubar-badge" title="Click để thử chuyển đổi trạng thái Menu Bar">[• VI·T]</button>
       </div>
 
       <ul class="nav-links">
+        <li><a href="#pain-points">Nỗi đau &amp; Giải pháp</a></li>
         <li><a href="#demo">Live Demo</a></li>
-        <li><a href="#features">Tính năng</a></li>
+        <li><a href="#features">Công nghệ</a></li>
         <li><a href="#privacy">Quyền riêng tư</a></li>
         <li><a href="#install">Cài đặt</a></li>
         <li><a href="#scorecard">Kiểm định</a></li>
@@ -49,28 +50,35 @@
   </div>
 
   <!-- ==============================================================================
-       Hero Section
+       Hero Section — Pain-Point Driven Value Proposition
        ============================================================================== -->
   <header class="hero-section">
     <div class="hero-container">
       <div class="hero-pill-badge">
         <span class="pulse-dot"></span>
-        <span>VFlow v1.0.0 chính thức ra mắt • Tối ưu 100% Apple Silicon</span>
+        <span>VFlow v1.0.0 Chính Thức Ra Mắt • Giải Cứu Trải Nghiệm Gõ Phím &amp; Giọng Nói Trên macOS</span>
       </div>
 
       <div class="hero-icon-wrapper">
         <div class="hero-icon-glow"></div>
-        <img src="assets/app_icon_nobg.png" alt="VFlow 3D Crystal Fluid Glass Orb" class="hero-icon">
+        <img src="assets/app_icon_nobg.png" alt="VFlow 3D Crystal Fluid Glass Orb" class="hero-icon" width="140" height="140">
       </div>
 
       <h1 class="hero-title">
-        Bilingual typing, <br>
-        <span class="gradient-text">reimagined for macOS.</span>
+        Tạm biệt nỗi ám ảnh <br>
+        <span class="gradient-text">nhảy dấu, nuốt chữ &amp; sửa văn nói trên Mac.</span>
       </h1>
 
       <p class="hero-subtitle">
-        Triệt tiêu hoàn toàn lỗi nhảy dấu khi gõ tiếng Anh. Gợi ý 3 tầng thông minh &amp; sửa ngữ pháp bằng AI On-Device. Caret HUD 120fps lướt êm theo con trỏ mọi ứng dụng. 100% riêng tư trên chip Apple Silicon.
+        Bạn mệt mỏi vì đang gõ tiếng Anh hay viết code bị biến thành dấu tiếng Việt? Bực mình vì viết câu dài bị đứt ngữ cảnh, hay đọc giọng nói xong vẫn phải ngồi gõ sửa lại từng chữ lủng củng? <strong>VFlow</strong> giải quyết triệt để ngay tại con trỏ chuột — độ trễ <code>&lt; 2ms</code>, 100% AI On-Device riêng tư trên Apple Silicon.
       </p>
+
+      <div class="pain-pills-row">
+        <span class="pain-pill">🚫 Hết nhảy dấu khi gõ <code>salary</code>, <code>arrow</code>, <code>class</code></span>
+        <span class="pain-pill">🧠 Giữ trọn ngữ cảnh câu dài &amp; sửa ngữ pháp VI/EN</span>
+        <span class="pain-pill">🎙️ Đọc giọng nói <code>⌥Space</code> → <code>Tab-Tab</code> để AI chuốt câu</span>
+        <span class="pain-pill">🎯 Chỉ hiện trong ô nhập text • Không làm phiền khi đọc web</span>
+      </div>
 
       <div class="hero-cta-group">
         <a href="https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg" class="btn-primary btn-large">
@@ -91,19 +99,18 @@
           <span>Tải .ZIP Archive</span>
         </a>
 
-        <a href="https://github.com/TGalioAutomation/VFlow" target="_blank" rel="noopener noreferrer" class="btn-secondary">
-          <span>Xem mã nguồn GitHub</span>
+        <a href="#pain-points" class="btn-secondary">
+          <span>Xem 6 nỗi đau VFlow đã giải quyết</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <polyline points="19 12 12 19 5 12"></polyline>
           </svg>
         </a>
       </div>
 
       <div class="hero-stats-ribbon">
         <div class="stat-item">
-          <strong>171 / 171</strong>
+          <strong>178 / 178</strong>
           <span>XCTest Passing</span>
         </div>
         <div class="stat-divider"></div>
@@ -113,8 +120,8 @@
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
-          <strong>100%</strong>
-          <span>On-Device CoreML</span>
+          <strong>2.2s</strong>
+          <span>Nhịp nghỉ Voice thông minh</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
@@ -126,14 +133,167 @@
   </header>
 
   <!-- ==============================================================================
+       User Pain Points vs. VFlow Solutions (Before / After Matrix)
+       ============================================================================== -->
+  <section id="pain-points" class="pain-section">
+    <div class="section-header">
+      <span class="section-tag">Thấu hiểu từ thực tế sử dụng hàng ngày</span>
+      <h2 class="section-title">Vì Sao Bạn Luôn Bực Mình Khi Gõ Phím Trên Mac?</h2>
+      <p class="section-desc">
+        Mọi tính năng của VFlow đều sinh ra từ chính những cơn ức chế thật sự của lập trình viên, nhân sự văn phòng và người làm việc song ngữ Anh - Việt trên macOS.
+      </p>
+    </div>
+
+    <div class="pain-grid">
+      <!-- Pain Point 1 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #01</span>
+          <span class="pain-category">Gõ Song Ngữ &amp; Viết Code</span>
+        </div>
+        <h3 class="pain-title">Đang gõ tiếng Anh hay biến code thì bị nhảy dấu tiếng Việt</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Bộ gõ truyền thống</div>
+            <p class="box-text">
+              Gõ <code>salary</code> thành <code>sảlảy</code>, <code>arrow</code> thành <code>arổw</code>, <code>service</code> thành <code>sẻvice</code>. Phải xóa đi gõ lại và bấm <code>⌃Space</code> đổi ngôn ngữ hàng chục lần mỗi giờ.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>Bilingual Auto-Escape &amp; Double-Tap Restore</strong>: Tự nhận diện ngữ âm tiếng Anh và cú pháp code theo thời gian thực để giữ nguyên từ gốc, hoặc gõ đúp phím dấu (<code>rr</code>, <code>ss</code>, <code>ff</code>) để khôi phục chữ cái nguyên bản tức thì.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Pain Point 2 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #02</span>
+          <span class="pain-category">Soạn Thảo Câu Dài</span>
+        </div>
+        <h3 class="pain-title">Viết câu dài hoặc dừng nghỉ suy nghĩ vài giây là đứt mạch gợi ý</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Công cụ gợi ý cũ</div>
+            <p class="box-text">
+              Chỉ cần bạn dừng tay nghỉ vài giây để nghĩ ý tiếp theo hoặc gõ dấu chấm <code>.</code>, bộ gợi ý lập tức quên hết vế trước, chỉ lấy được 1–2 từ cuối hoặc làm tràn vỡ khung hiển thị khi câu quá dài.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>Full-Sentence Context &amp; Smart Ellipsis</strong>: Giữ trọn ngữ cảnh cả đoạn văn qua cả nhịp nghỉ; tự động thu gọn hiển thị thông minh trên Caret Pill và cho phép nhấn <code>Tab-Tab</code> (kèm hiệu ứng ánh sáng <em>Shimmer Sweep</em>) để thay thế toàn câu.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Pain Point 3 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #03</span>
+          <span class="pain-category">Voice Dictation &amp; AI</span>
+        </div>
+        <h3 class="pain-title">Đọc giọng nói xong không tự điền vào ô text, hoặc văn nói lủng củng phải gõ sửa lại</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Đọc văn bản thông thường</div>
+            <p class="box-text">
+              Vừa ngừng 1 giây để nhớ từ tiếng Anh đã bị cắt lời; nhận diện xong không tự điền vào khung chat; hoặc chép nguyên xi câu nói đầy từ thừa (<em>"hình như là, cái phần, nhưng mà..."</em>) khiến bạn mất thêm thời gian ngồi biên tập lại.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>Voice-to-AI Polish (<code>⌥Space</code> → <code>Tab-Tab</code>)</strong>: Chờ nhịp nghỉ tự nhiên <code>2.2s</code>, tự động điền ngay văn bản vào ô đang focus, đồng thời hiển thị gợi ý <strong>AI biên tập văn nói thành văn viết chỉn chu</strong> (<code>✨</code>) trên Caret Pill để nhấn <code>Tab-Tab</code> thay thế ngay!
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Pain Point 4 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #04</span>
+          <span class="pain-category">Ngữ Pháp Anh - Việt</span>
+        </div>
+        <h3 class="pain-title">Sót lỗi ngữ pháp Tiếng Anh &amp; lỗi chính tả ngữ cảnh Tiếng Việt khi gõ nhanh</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Kiểm tra chính tả đơn lẻ</div>
+            <p class="box-text">
+              Gõ vội trong cuộc họp dễ lọt lỗi chia động từ tiếng Anh (<code>"she dont know"</code>, <code>"i goes to school"</code>) hoặc chữ có nghĩa nhưng sai ngữ cảnh tiếng Việt (<code>"to đang làm"</code>, <code>"không cau"</code>) mà trình kiểm tra từ đơn không phát hiện được.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>Bilingual Grammar &amp; Contextual Polish (Tầng 2 <code>✨</code>)</strong>: Phân tích đồng thời ngữ pháp tiếng Anh (chủ ngữ - động từ, trợ động từ, mạo từ) và ngữ cảnh cụm từ tiếng Việt để đề xuất câu đúng ngữ pháp ngay khi bạn đang gõ.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Pain Point 5 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #05</span>
+          <span class="pain-category">Trình Duyệt &amp; Electron Apps</span>
+        </div>
+        <h3 class="pain-title">Hiện popup gợi ý vô duyên khi đang đọc web, hoặc bấm chọn nhưng ô text không đổi</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Xung đột trên Chrome / IDE</div>
+            <p class="box-text">
+              Nhiều công cụ AI cứ hiện thanh nổi che màn hình trên Chrome dù bạn chỉ đang cuộn đọc báo. Khi bấm chọn gợi ý trong ứng dụng Electron/Web, chữ mới không thay thế được chữ cũ hoặc bị nuốt ký tự đầu.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>Deep AX Focus &amp; Hybrid Atomic Injection</strong>: Kiểm tra sâu cây Accessibility (<code>AXEditableAncestor</code>) — Caret Pill <strong>tuyệt đối ẩn khi không focus vào ô nhập chữ</strong>, và kết hợp <code>CGEvent</code> + <code>AXValue</code> để thay thế văn bản chính xác 100%.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Pain Point 6 -->
+      <article class="pain-card">
+        <div class="pain-card-header">
+          <span class="pain-number">Nỗi đau #06</span>
+          <span class="pain-category">Bảo Mật &amp; Độ Trễ</span>
+        </div>
+        <h3 class="pain-title">Lo sợ lộ mật khẩu, hợp đồng và chịu cảnh lag mạng vì bàn phím Cloud AI</h3>
+        <div class="comparison-stack">
+          <div class="comparison-box box-before">
+            <div class="box-label">❌ Bàn phím AI đám mây</div>
+            <p class="box-text">
+              Mọi phím gõ (tin nhắn riêng tư, mã nguồn, tài liệu mật) bị gửi lên máy chủ bên thứ 3; chờ phản hồi mạng mất <code>300–800ms</code> và phải trả phí thuê bao hàng tháng.
+            </p>
+          </div>
+          <div class="comparison-box box-after">
+            <div class="box-label">✅ Giải pháp từ VFlow</div>
+            <p class="box-text">
+              <strong>100% On-Device Apple Silicon (<code>0 KB</code> Cloud)</strong>: Chạy hoàn toàn nội bộ trên Neural Engine với độ trễ <code>&lt; 2ms</code>, không gọi bất kỳ API mạng nào, mã nguồn mở minh bạch và miễn phí trọn đời.
+            </p>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ==============================================================================
        Interactive Live Demo Widget
        ============================================================================== -->
   <section id="demo" class="demo-section">
     <div class="section-header">
-      <span class="section-tag">Trải nghiệm tương tác</span>
-      <h2 class="section-title">Thử nghiệm Caret HUD &amp; Gợi ý 3 tầng</h2>
+      <span class="section-tag">Trải nghiệm tương tác trực tiếp</span>
+      <h2 class="section-title">Thử Nghiệm Cách VFlow Xử Lý Thực Tế</h2>
       <p class="section-desc">
-        Gõ thử vào ô nhập liệu hoặc bấm các ví dụ bên dưới để xem Caret HUD mô phỏng xử lý phím và đưa ra các lựa chọn tức thì.
+        Chọn một tình huống "nỗi đau" bên dưới, bấm thử <strong>🎙️ Giả lập giọng nói</strong>, hoặc nhấn <strong>Tab-Tab</strong> / click vào chip gợi ý để xem hiệu ứng <em>Shimmer Sweep</em> sửa lại câu tức thì.
       </p>
     </div>
 
@@ -144,28 +304,40 @@
           <span class="traffic-light traffic-minimize"></span>
           <span class="traffic-light traffic-maximize"></span>
         </div>
-        <span class="window-title">VFlow Sandbox — Live Interactive Caret HUD</span>
+        <span class="window-title">VFlow Sandbox — Live Pain-Point Resolver &amp; Caret HUD</span>
         <span class="window-meta">120fps Real-Time Engine</span>
       </div>
 
       <div class="demo-body">
         <div class="demo-presets">
-          <span class="preset-label">Kịch bản thử nghiệm:</span>
-          <button class="preset-btn active" data-preset="to dang lam viec">to dang lam viec</button>
-          <button class="preset-btn" data-preset="ary">ary (English Escape)</button>
-          <button class="preset-btn" data-preset="thuong thuyet">thuong thuyet</button>
-          <button class="preset-btn" data-preset="ko sao ca">ko sao ca (Teencode)</button>
-          <button class="preset-btn" data-preset="vieest dduocj">vieest dduocj (Free Telex)</button>
-          <button class="preset-btn" data-preset="subclass">subclass (Dev Syntax)</button>
+          <span class="preset-label">Tình huống thực tế:</span>
+          <button class="preset-btn active" data-preset="voice_ai">🎙️ Đọc giọng nói → AI Polish</button>
+          <button class="preset-btn" data-preset="long_sentence">📝 Câu siêu dài &amp; Nghỉ nhịp</button>
+          <button class="preset-btn" data-preset="en_grammar">🇬🇧 Sửa ngữ pháp Tiếng Anh</button>
+          <button class="preset-btn" data-preset="to dang lam viec">🇻🇳 Lỗi ngữ cảnh Tiếng Việt</button>
+          <button class="preset-btn" data-preset="ary">💻 Gõ tiếng Anh &amp; Code (salary)</button>
+          <button class="preset-btn" data-preset="ko sao ca">⚡ Gõ tắt Teencode (ko sao dc)</button>
         </div>
 
-        <div class="demo-editor-area">
-          <textarea id="demoInput" class="demo-input" rows="2" placeholder="Nhập thử văn bản tại đây (ví dụ: 'to dang lam viec', 'salary', 'ko sao')..."></textarea>
+        <div id="demoEditorBox" class="demo-editor-area">
+          <div class="demo-editor-toolbar">
+            <span id="demoScenarioHint" class="demo-scenario-hint">💡 Đang mô phỏng: Đọc giọng nói tự nhiên → Tự điền vào ô text → Gợi ý ✨ AI biên tập câu trên Caret Pill.</span>
+            <button id="simulateVoiceBtn" type="button" class="voice-sim-btn">
+              <span>🎙️ Thử đọc giọng nói (⌥Space)</span>
+            </button>
+          </div>
+
+          <textarea id="demoInput" class="demo-input" rows="3" placeholder="Nhập thử văn bản hoặc bấm nút '🎙️ Thử đọc giọng nói' để xem VFlow xử lý..."></textarea>
+
+          <!-- Shimmer status banner when Tab-Tab / AI Polish runs -->
+          <div id="shimmerToast" class="shimmer-toast" aria-live="polite">
+            ✨ Đang thay thế toàn câu bằng AI Polish (Tab-Tab Shimmer Sweep)...
+          </div>
 
           <!-- Caret Pill HUD Simulation -->
           <div id="simulatedHud" class="simulated-caret-hud">
             <!-- Left: 52x22px Silk Sine Wave Canvas -->
-            <div class="hud-wave-block" title="Sóng lụa âm thanh & nhịp gõ 120fps">
+            <div class="hud-wave-block" title="Sóng lụa âm thanh &amp; nhịp gõ 120fps">
               <canvas id="waveCanvas" class="hud-wave-canvas"></canvas>
             </div>
 
@@ -190,19 +362,19 @@
         <div class="demo-shortcuts-guide">
           <div class="shortcut-group">
             <kbd>⇥ Tab</kbd> hoặc <kbd>⌥1</kbd>
-            <span>Chọn gợi ý Tầng 1 (⚡ Dấu tức thì)</span>
+            <span>Tầng 1 (⚡ Sửa dấu &amp; Gõ tắt)</span>
           </div>
           <div class="shortcut-group">
-            <kbd>⌥2</kbd>
-            <span>Chọn Tầng 2 (✨ AI Polish &amp; Sửa ngữ pháp)</span>
+            <kbd>⇥⇥ Tab-Tab</kbd> hoặc <kbd>⌥2</kbd>
+            <span>Tầng 2 (✨ AI Polish &amp; Ngữ pháp cả câu)</span>
           </div>
           <div class="shortcut-group">
             <kbd>⌥3</kbd>
-            <span>Chọn Tầng 3 (🔮 Đoán từ kế tiếp)</span>
+            <span>Tầng 3 (🔮 Đoán từ kế tiếp)</span>
           </div>
           <div class="shortcut-group">
             <kbd>⌥Space</kbd>
-            <span>Giữ để thu âm (Push-to-Talk)</span>
+            <span>Nói tiếng Việt → Tự dừng sau 2.2s</span>
           </div>
         </div>
       </div>
@@ -214,10 +386,10 @@
        ============================================================================== -->
   <section id="features" class="bento-section">
     <div class="section-header">
-      <span class="section-tag">Kiến trúc công nghệ</span>
-      <h2 class="section-title">5 Trụ Cột Đột Phá Cho macOS</h2>
+      <span class="section-tag">Kiến trúc công nghệ bên dưới</span>
+      <h2 class="section-title">5 Trụ Cột Kỹ Thuật Giải Quyết Triệt Để Vấn Đề</h2>
       <p class="section-desc">
-        Kết hợp tinh hoa giữa Finite State Machine tốc độ cao và trí tuệ nhân tạo On-Device chạy trực tiếp trên Apple Neural Engine.
+        Kết hợp tinh hoa giữa Finite State Machine tốc độ cao, Deep Accessibility Verification và trí tuệ nhân tạo On-Device chạy trực tiếp trên Apple Neural Engine.
       </p>
     </div>
 
@@ -225,16 +397,16 @@
       <!-- Card 1: Neural Bilingual Engine (Col 8) -->
       <div class="bento-card col-8">
         <div>
-          <span class="card-badge badge-cyan">VFlowCore • Input Engine</span>
-          <h3 class="card-title">Bộ gõ Song ngữ Tự động Nhận diện (Bilingual Auto-Escape)</h3>
+          <span class="card-badge badge-cyan">VFlowCore • Bilingual Engine</span>
+          <h3 class="card-title">Bộ gõ Song ngữ Tự động Nhận diện &amp; Ngữ pháp Anh-Việt</h3>
           <p class="card-desc">
-            Không còn nỗi ám ảnh gõ tiếng Anh bị nhảy dấu lung tung. VFlow phân tích ngữ âm theo thời gian thực: phân biệt hậu tố tiếng Anh (<code>-ary</code>, <code>-ory</code>, <code>-ery</code>) với thanh hỏi tiếng Việt, bảo toàn từ khoá lập trình và biến code (<code>salary</code>, <code>arrow</code>, <code>error</code>, <code>class</code>, <code>subclass</code>, <code>coffee</code>).
+            Không còn nỗi ám ảnh gõ tiếng Anh bị nhảy dấu lung tung hay sót lỗi ngữ pháp trong email quan trọng. VFlow phân tích cấu trúc âm tiết và ngữ cảnh toàn câu theo thời gian thực.
           </p>
           <ul class="card-feature-list">
-            <li>Hỗ trợ trọn vẹn Telex &amp; VNI với cơ chế FSM không thể crash.</li>
-            <li>Đặt dấu tự do trong từ (<code>vieest</code>, <code>toasn</code> ra <code>viết</code>, <code>toán</code> chuẩn xác).</li>
-            <li>Tự động mở rộng viết tắt teencode (<code>ko</code> → <code>không</code>, <code>dc</code> → <code>được</code>, <code>trc</code> → <code>trước</code>).</li>
-            <li>Xoá dấu tức thì bằng phím <code>z</code> (Telex) hoặc <code>0</code> (VNI) kể cả sau khi xoá lùi.</li>
+            <li>Bảo toàn tuyệt đối từ vựng tiếng Anh &amp; từ khóa lập trình (<code>salary</code>, <code>arrow</code>, <code>error</code>, <code>class</code>, <code>subclass</code>, <code>service</code>).</li>
+            <li>Kiểm tra ngữ pháp song ngữ: tự sửa lỗi chia động từ/đại từ tiếng Anh (<code>she dont know</code> → <code>She doesn't know.</code>) và lỗi ngữ cảnh tiếng Việt.</li>
+            <li>Giữ trọn ngữ cảnh câu dài qua cả nhịp nghỉ và dấu câu; hỗ trợ đặt dấu tự do (<code>vieest dduocj</code> → <code>viết được</code>).</li>
+            <li>Mở rộng viết tắt teencode tức thì (<code>ko</code> → <code>không</code>, <code>dc</code> → <code>được</code>, <code>trc</code> → <code>trước</code>, <code>ntn</code> → <code>như thế nào</code>).</li>
           </ul>
         </div>
       </div>
@@ -245,13 +417,13 @@
           <span class="card-badge badge-violet">VFlowUI • Caret HUD</span>
           <h3 class="card-title">120fps Live Caret HUD</h3>
           <p class="card-desc">
-            Viên thuốc nổi siêu nhỏ gọn thiết kế Liquid Glass cao 40px, lướt êm ngay dưới con trỏ soạn thảo ở mọi ứng dụng.
+            Viên thuốc nổi Liquid Glass cao 40px lướt êm ngay dưới con trỏ soạn thảo — và tự ẩn hoàn toàn khi bạn không focus vào ô nhập chữ.
           </p>
           <ul class="card-feature-list">
-            <li>Cửa sổ <code>NSPanel</code> non-activating, không cướp focus.</li>
-            <li>Sóng lụa Cyan &amp; Violet 120fps chuyển động mượt mà.</li>
-            <li>Tự động lật thông minh khi chạm mép màn hình.</li>
-            <li>Tương thích hoàn hảo hệ thống đa màn hình.</li>
+            <li>Xác thực sâu <code>AXEditableAncestor</code> chống hiện nhầm trên trình duyệt.</li>
+            <li>Hiệu ứng <strong>Tab-Tab Shimmer Sweep</strong> phản hồi thị giác rõ ràng khi sửa câu.</li>
+            <li>Thu gọn thông minh (<code>…</code>) khi câu quá dài mà không tràn màn hình.</li>
+            <li>Click trực tiếp hoặc nhấn <code>Tab-Tab</code> để thay thế văn bản nguyên tử.</li>
           </ul>
         </div>
       </div>
@@ -260,17 +432,17 @@
       <div class="bento-card col-4">
         <div>
           <div class="card-header-icon">
-            <img src="assets/voice_orb_nobg.png" alt="Futuristic Glowing Mic Orb">
+            <img src="assets/voice_orb_nobg.png" alt="Futuristic Glowing Mic Orb" width="44" height="44">
           </div>
-          <span class="card-badge badge-cyan">VFlowPlatform • Speech</span>
-          <h3 class="card-title">Push-to-Talk Voice Dictation</h3>
+          <span class="card-badge badge-cyan">VFlowPlatform • Voice + AI</span>
+          <h3 class="card-title">Voice Dictation &amp; AI Polish</h3>
           <p class="card-desc">
-            Giữ phím tắt <code>⌥Space</code> (Option + Space) để nói tiếng Việt. Giọng nói được chuyển thành văn bản tức thì qua <code>SFSpeechRecognizer</code> với độ chính xác cao.
+            Bấm <code>⌥Space</code> để đọc tự nhiên. Sau nhịp nghỉ <code>2.2s</code>, văn bản tự động điền vào ô đang focus kèm gợi ý <code>✨</code> AI biên tập lại câu trên Caret Pill.
           </p>
           <ul class="card-feature-list">
-            <li>Hỗ trợ cả 2 chế độ: Hold-to-Talk và Tap-to-Talk.</li>
-            <li>Tự động dọn từ đệm (à, ừm, thì là mà).</li>
-            <li>Bơm văn bản trực tiếp vào ứng dụng đang mở.</li>
+            <li>Watchdog <code>2.2s</code> không cắt lời sớm khi bạn đang nghĩ từ tiếng Anh.</li>
+            <li>Tự sửa lỗi nhận diện âm tiết pha trộn (<em>"phần tách"</em> → <em>"phần text"</em>).</li>
+            <li>Nhấn <code>Tab-Tab</code> ngay sau khi đọc để biến văn nói thành văn viết mượt mà.</li>
           </ul>
         </div>
       </div>
@@ -279,18 +451,18 @@
       <div class="bento-card col-8" id="privacy">
         <div>
           <div class="card-header-icon">
-            <img src="assets/neural_core_nobg.png" alt="Glowing Isometric Neural Core">
+            <img src="assets/neural_core_nobg.png" alt="Glowing Isometric Neural Core" width="44" height="44">
           </div>
           <span class="card-badge badge-emerald">Privacy &amp; Security</span>
-          <h3 class="card-title">100% Bảo mật &amp; Quyền Riêng Tư Tuyệt Đối</h3>
+          <h3 class="card-title">100% Bảo mật &amp; Quyền Riêng Tư Tuyệt Đối Trên Thiết Bị</h3>
           <p class="card-desc">
-            VFlow cam kết triết lý: <strong>Dữ liệu phím gõ của bạn là bất khả xâm phạm</strong>. Toàn bộ logic sửa lỗi, mô hình ngôn ngữ và bộ từ điển đều chạy trực tiếp trên thiết bị (On-Device) bằng chip Apple Silicon Neural Engine.
+            VFlow cam kết triết lý: <strong>Dữ liệu phím gõ và giọng nói của bạn là bất khả xâm phạm</strong>. Toàn bộ logic sửa lỗi, mô hình ngôn ngữ và bộ từ điển đều chạy trực tiếp trên thiết bị (On-Device) bằng chip Apple Silicon Neural Engine.
           </p>
           <ul class="card-feature-list">
-            <li><strong>Không gọi bất kỳ API đám mây nào</strong>: Không gửi dữ liệu lên máy chủ từ xa.</li>
-            <li><strong>Không ghi nhật ký phím gõ (Zero Keylogging)</strong>: Bộ đệm chỉ tồn tại trên RAM trong phiên gõ.</li>
-            <li><strong>Không có thư viện bên thứ 3 (Zero Dependencies)</strong>: Xây dựng 100% bằng Swift và Apple SDK nguyên bản.</li>
-            <li><strong>Mã nguồn mở và kiểm định công khai</strong>: Mọi dòng mã đều minh bạch trên GitHub.</li>
+            <li><strong>Không gọi bất kỳ API đám mây nào</strong>: 0 KB gửi ra ngoài, hoạt động 100% cả khi ngắt kết nối Internet.</li>
+            <li><strong>Không ghi nhật ký phím gõ (Zero Keylogging)</strong>: Bộ đệm chỉ tồn tại trên RAM trong phiên gõ hiện tại.</li>
+            <li><strong>Không dùng thư viện bên thứ 3 (Zero Dependencies)</strong>: Xây dựng 100% bằng Swift 6 và Apple SDK nguyên bản.</li>
+            <li><strong>Mã nguồn mở và kiểm định công khai</strong>: Mọi dòng mã đều minh bạch và có thể kiểm chứng trên GitHub.</li>
           </ul>
         </div>
       </div>
@@ -301,7 +473,7 @@
           <span class="card-badge badge-violet">Control Center</span>
           <h3 class="card-title">Bento Control Center &amp; Menu Bar</h3>
           <p class="card-desc">
-            Biểu tượng Menu Bar dạng viên thuốc Retina hiển thị trạng thái gõ sống động <code>[• VI·T]</code>. Bấm chuột phải hoặc ⌥-Click để chuyển nhanh VI ⇄ EN. Bảng cài đặt Bento 4 tab trực quan giúp cấu hình gõ tắt, chọn phong cách câu (Tự nhiên, Lịch sự, Ngắn gọn) và thử nghiệm ngay trong Live Sandbox.
+            Biểu tượng Menu Bar dạng viên thuốc Retina hiển thị trạng thái gõ sống động <code>[• VI·T]</code>. Bấm chuột phải hoặc ⌥-Click để chuyển nhanh VI ⇄ EN, hoặc bấm <strong>Nói ngay</strong> để tự động đóng menu và thu âm điền thẳng vào ứng dụng bạn đang làm việc.
           </p>
         </div>
       </div>
@@ -310,9 +482,9 @@
       <div class="bento-card col-6">
         <div>
           <span class="card-badge badge-cyan">Architecture</span>
-          <h3 class="card-title">Swift 6 &amp; Strict Concurrency</h3>
+          <h3 class="card-title">Swift 6 Strict Concurrency &amp; Multi-Process IPC</h3>
           <p class="card-desc">
-            Ứng dụng được viết hoàn toàn trên chuẩn Swift 6 với cơ chế đồng bộ đa luồng an toàn (<code>@MainActor</code>, <code>NSLock</code>, <code>Sendable</code>), không bao giờ gây giật lag luồng sự kiện <code>CGEventTap</code> hay tiêu tốn tài nguyên CPU khi ở trạng thái nghỉ.
+            Kiến trúc tách biệt luồng sự kiện <code>CGEventTap</code> siêu nhẹ và tiến trình nhận diện giọng nói chuyên biệt qua IPC không trễ, đảm bảo 0% xung đột quyền hệ thống và không tiêu tốn tài nguyên CPU khi ở trạng thái nghỉ.
           </p>
         </div>
       </div>
@@ -326,8 +498,8 @@
     <div class="install-container">
       <div class="section-header">
         <span class="section-tag">Hướng dẫn nhanh</span>
-        <h2 class="section-title">Cài Đặt &amp; Bắt Đầu Sử Dụng</h2>
-        <p class="section-desc">Chỉ mất 30 giây để cài đặt và kích hoạt VFlow trên máy Mac của bạn.</p>
+        <h2 class="section-title">Cài Đặt &amp; Bắt Đầu Sử Dụng Trong 30 Giây</h2>
+        <p class="section-desc">Thiết kế chuẩn macOS Native — kéo thả nhẹ nhàng, không cần cấu hình phức tạp.</p>
       </div>
 
       <div class="steps-grid">
@@ -349,9 +521,9 @@
 
         <div class="step-card">
           <div class="step-number">03</div>
-          <h3 class="step-title">Cấp quyền hệ thống</h3>
+          <h3 class="step-title">Cấp quyền &amp; Trải nghiệm</h3>
           <p class="step-desc">
-            Khởi động VFlow và cấp quyền <strong>Trợ năng (Accessibility)</strong> &amp; <strong>Giám sát đầu vào (Input Monitoring)</strong> để bắt đầu gõ tiếng Việt.
+            Khởi động VFlow và cấp quyền <strong>Accessibility</strong>, <strong>Input Monitoring</strong> &amp; <strong>Microphone</strong> để tận hưởng gõ song ngữ và đọc giọng nói AI.
           </p>
         </div>
       </div>
@@ -365,7 +537,7 @@
     <div class="section-header">
       <span class="section-tag">Báo cáo kiểm định chất lượng</span>
       <h2 class="section-title">Bảng Đánh Giá Mức Độ Sẵn Sàng (Scorecard)</h2>
-      <p class="section-desc">Mọi tiêu chuẩn kỹ thuật đều được kiểm nghiệm tự động và độc lập trước khi đóng gói phát hành.</p>
+      <p class="section-desc">Mọi kịch bản lỗi thực tế của người dùng đều được đóng băng thành bài kiểm thử tự động trước khi phát hành.</p>
     </div>
 
     <div class="scorecard-table-wrapper">
@@ -381,9 +553,9 @@
         <tbody>
           <tr>
             <td><strong>XCTest Regression Suite</strong></td>
-            <td>100% Pass các bộ test đơn vị, tích hợp, stress test</td>
+            <td>100% Pass các bộ test đơn vị, tích hợp, ngữ pháp, voice &amp; focus</td>
             <td><span class="badge-pass">✓ PASSED</span></td>
-            <td>171/171 tests passed (0 failures, 3.14s)</td>
+            <td>178/178 tests passed (0 failures)</td>
           </tr>
           <tr>
             <td><strong>Swift 6 Concurrency</strong></td>
@@ -426,13 +598,13 @@
     </div>
 
     <!-- Checksum verification box -->
-    <div style="max-width: 980px; margin: 30px auto 0; padding: 22px; background: rgba(13, 19, 36, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.8rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span style="color: var(--accent-cyan); font-weight: 700;">SHA-256 Official Checksums (v1.0.0)</span>
+    <div class="checksum-card">
+      <div class="checksum-header">
+        <span class="checksum-title">SHA-256 Official Checksums (v1.0.0)</span>
         <button class="preset-btn copy-btn" data-copy-target="#checksumBlock">Sao chép mã băm</button>
       </div>
-      <pre id="checksumBlock" style="color: var(--text-secondary); overflow-x: auto; line-height: 1.6;">e4fa6e44f0a62b30e416b96ca8c19c4aaad5dcfac01bc3e6290b16d1d0c251e7  VFlow-v1.0.0-macOS-arm64.dmg
-4aac3a5d92122055ba1fe5bebfd63adca84aab173bdbff3a1cc6d4d3922f2038  VFlow-v1.0.0-macOS-arm64.zip</pre>
+      <pre id="checksumBlock" class="checksum-pre">83ce6624e6f8da011d4c681a3fe59a94d94f06c85ad2f4211d8f811768065c27  VFlow-v1.0.0-macOS-arm64.dmg
+6c69b4a5cb8ff4aa67be66fe686889fb074afc8ade9f0c105e6488ca0b3e02cc  VFlow-v1.0.0-macOS-arm64.zip</pre>
     </div>
   </section>
 
@@ -445,7 +617,7 @@
         <div class="footer-brand">
           <img src="assets/app_icon_nobg.png" alt="VFlow Logo" width="28" height="28">
           <span style="font-weight: 700; color: #fff; font-size: 1.05rem;">VFlow</span>
-          <span style="font-size: 0.8rem; color: var(--text-dim);">— Next-Gen Bilingual macOS Typing</span>
+          <span style="font-size: 0.8rem; color: var(--text-dim);">— Next-Gen Bilingual macOS Typing &amp; Voice AI</span>
         </div>
 
         <ul class="footer-links">
