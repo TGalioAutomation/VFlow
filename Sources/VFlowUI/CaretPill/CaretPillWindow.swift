@@ -490,9 +490,21 @@ public final class CaretHUDModel: ObservableObject {
             }
 
             // Merge Neural Engine next-word prediction when cursor is after a completed word
+            let cleanCapturedLower = capturedSentence
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .punctuationCharacters)
+                .lowercased()
+            let cleanNextLower = aiResult.nextWord
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .punctuationCharacters)
+                .lowercased()
+            let isDuplicateSuffix = !cleanNextLower.isEmpty &&
+                (cleanCapturedLower == cleanNextLower || cleanCapturedLower.hasSuffix(" " + cleanNextLower))
+
             if capturedCurrentWord.isEmpty,
-               !aiResult.nextWord.isEmpty,
-               !updated.contains(where: { $0.text.lowercased() == aiResult.nextWord.lowercased() }) {
+               !cleanNextLower.isEmpty,
+               !isDuplicateSuffix,
+               !updated.contains(where: { $0.text.lowercased() == cleanNextLower }) {
                 let nextItem = SuggestionItem(
                     text: aiResult.nextWord,
                     kind: .nextWord,

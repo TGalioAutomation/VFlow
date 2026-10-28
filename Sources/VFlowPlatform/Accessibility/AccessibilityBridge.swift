@@ -206,12 +206,13 @@ public final class AccessibilityBridge: @unchecked Sendable {
         let subrole = readStringAttr(element, kAXSubroleAttribute)
         let isEditableAttr = readBoolAttr(element, "AXEditable") ?? readBoolAttr(element, "AX Is Editable")
         let isValueSettable = isAttrSettable(element, kAXValueAttribute)
-        let isSelectedTextSettable = isAttrSettable(element, kAXSelectedTextAttribute)
+        let isSelectedTextSettable = isAttrSettable(element, kAXSelectedTextAttribute) ||
+            ((role == "AXGroup" || role == "AXStaticText") && isAttrSettable(element, kAXSelectedTextRangeAttribute))
 
-        // Walk up to 5 ancestors to detect rich contenteditable containers when cursor is inside a child paragraph/span
+        // Walk up to 10 ancestors to detect rich contenteditable containers when cursor is inside a child paragraph/span
         var ancestorIsEditable = false
         var currentParent: AXUIElement = element
-        for _ in 0..<5 {
+        for _ in 0..<10 {
             var parentRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
                   let parentVal = parentRef,
@@ -220,18 +221,23 @@ public final class AccessibilityBridge: @unchecked Sendable {
             }
             let parentEl = parentVal as! AXUIElement
             let parentRole = readStringAttr(parentEl, kAXRoleAttribute) ?? ""
-            if parentRole == "AXWindow" || parentRole == "AXApplication" || parentRole == "AXScrollArea" {
+            if parentRole == "AXWindow" || parentRole == "AXApplication" {
                 break
             }
             if parentRole == "AXTextField" || parentRole == "AXTextArea" || parentRole == "AXComboBox" || parentRole == "AXSearchField" {
                 ancestorIsEditable = true
                 break
             }
-            if readBoolAttr(parentEl, "AXEditable") == true {
+            if readBoolAttr(parentEl, "AXEditable") == true || readBoolAttr(parentEl, "AX Is Editable") == true {
                 ancestorIsEditable = true
                 break
             }
             if parentRole == "AXWebArea" {
+                break
+            }
+            if parentRole != "AXScrollArea" &&
+               (isAttrSettable(parentEl, kAXValueAttribute) || isAttrSettable(parentEl, kAXSelectedTextAttribute)) {
+                ancestorIsEditable = true
                 break
             }
             currentParent = parentEl
@@ -404,26 +410,56 @@ public final class AccessibilityBridge: @unchecked Sendable {
     public func readFocusedTextContext() -> FocusedTextContext? {
         guard isFocusedElementEditableTextInput(),
               let element = focusedUIElement() else { return nil }
-        var valueRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
-              let fullText = valueRef as? String else {
-            return nil
-        }
 
-        let nsText = fullText as NSString
-        var cursorUTF16 = nsText.length
-
-        var rangeRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
-           let axVal = rangeRef,
-           CFGetTypeID(axVal) == AXValueGetTypeID() {
-            var cfRange = CFRange(location: 0, length: 0)
-            if AXValueGetValue((axVal as! AXValue), .cfRange, &cfRange) {
-                cursorUTF16 = max(0, min(nsText.length, cfRange.location))
+        func extractValueAndRange(from el: AXUIElement) -> (String, Int)? {
+            var valueRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(el, kAXValueAttribute as CFString, &valueRef) == .success,
+                  let text = valueRef as? String else {
+                return nil
             }
+            let ns = text as NSString
+            var cursor = ns.length
+            var rangeRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
+               let axVal = rangeRef,
+               CFGetTypeID(axVal) == AXValueGetTypeID() {
+                var cfRange = CFRange(location: 0, length: 0)
+                if AXValueGetValue((axVal as! AXValue), .cfRange, &cfRange) {
+                    cursor = max(0, min(ns.length, cfRange.location))
+                }
+            }
+            return (text, cursor)
         }
 
-        return Self.extractContext(fullText: fullText, cursorLocation: cursorUTF16)
+        if let (fullText, cursorUTF16) = extractValueAndRange(from: element) {
+            return Self.extractContext(fullText: fullText, cursorLocation: cursorUTF16)
+        }
+
+        // Fallback for rich contenteditable editors where focusedUIElement() is a child span/group
+        // and the full text value is held on the parent AXTextArea / AXEditable container
+        var currentParent: AXUIElement = element
+        for _ in 0..<8 {
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parentVal = parentRef,
+                  CFGetTypeID(parentVal) == AXUIElementGetTypeID() else {
+                break
+            }
+            let parentEl = parentVal as! AXUIElement
+            var roleRef: CFTypeRef?
+            let parentRole = (AXUIElementCopyAttributeValue(parentEl, kAXRoleAttribute as CFString, &roleRef) == .success)
+                ? (roleRef as? String ?? "")
+                : ""
+            if parentRole == "AXWindow" || parentRole == "AXApplication" || parentRole == "AXWebArea" {
+                break
+            }
+            if let (fullText, cursorUTF16) = extractValueAndRange(from: parentEl) {
+                return Self.extractContext(fullText: fullText, cursorLocation: cursorUTF16)
+            }
+            currentParent = parentEl
+        }
+
+        return nil
     }
 }
 

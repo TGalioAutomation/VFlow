@@ -779,6 +779,13 @@ public final class EventTapHook: @unchecked Sendable {
                 }
                 return savedWord
             }
+            if item.replaceCurrentWord,
+               let lastBuf = TypingBuffer.shared.recentWords().last,
+               !lastBuf.isEmpty,
+               liveText?.hasSuffix(" ") != true,
+               item.text.lowercased().hasPrefix(lastBuf.lowercased() + " ") {
+                return lastBuf
+            }
             return ""
         }()
 
@@ -955,6 +962,16 @@ public final class EventTapHook: @unchecked Sendable {
             let leftStr = nsFull.substring(to: safeCursor)
             let rightStr = nsFull.substring(from: safeCursor)
 
+            let cleanLeftLower = leftStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let cleanItemLower = item.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !cleanItemLower.isEmpty && (cleanLeftLower == cleanItemLower || cleanLeftLower.hasSuffix(" " + cleanItemLower)) {
+                logDiagnostic("APPLY_NEXT_WORD_SKIPPED_DUPLICATE text='\(item.text)'")
+                clearMouseReset()
+                engine.reset()
+                notifyTypingState()
+                return
+            }
+
             // Count trailing spaces on left
             var leftSpaces = 0
             for ch in leftStr.reversed() {
@@ -1021,6 +1038,7 @@ public final class EventTapHook: @unchecked Sendable {
 
         let textToInsert = (needsLeadingSpace ? " " : "") + item.text + (needsTrailingSpace ? " " : "")
         postUnicodeString(textToInsert)
+        logDiagnostic("APPLY_NEXT_WORD text='\(item.text)' insertedLen=\(textToInsert.count)")
         clearMouseReset()
         engine.reset()
         for tok in item.text.components(separatedBy: .whitespaces) where !tok.isEmpty {

@@ -1016,4 +1016,114 @@ final class VietnameseEngineTests: XCTestCase {
         )
         XCTAssertFalse(CaretPillWindow.shared.isVisible)
     }
+
+    @MainActor
+    func testKeylogSuggestionVerificationScenario() {
+        // 1. Contextual accented Vietnamese typo disambiguation ("cải tiếng" -> "cải tiến", "ổn địng" -> "ổn định")
+        XCTAssertEqual(
+            SuggestionEngine.resolveContextualWordFix(prevWord: "cải", currentWord: "tiếng"),
+            "tiến"
+        )
+        XCTAssertEqual(
+            SuggestionEngine.resolveContextualWordFix(prevWord: "ổn", currentWord: "địng"),
+            "định"
+        )
+        XCTAssertEqual(
+            SuggestionEngine.resolveContextualWordFix(prevWord: "tra", currentWord: "fia", wordAfterCursor: "lỗi"),
+            "fix"
+        )
+        XCTAssertEqual(
+            VietnameseTextPolisher.polish("vấn đề ngữ cảnh cần cải tiếng."),
+            "vấn đề ngữ cảnh cần cải tiến."
+        )
+
+        // 2. Full-sentence contextual sliding-window repair on user's keylog sentence:
+        // "Grill-me kiểm tra fia lỗi suggestion bị lỗi không nhận ổn địng"
+        let rawKeylogSentence = "Grill-me kiểm tra fia lỗi suggestion bị lỗi không nhận ổn địng"
+        let polishedKeylogSentence = VietnameseTextPolisher.polish(rawKeylogSentence)
+        XCTAssertEqual(
+            polishedKeylogSentence,
+            "Grill-me kiểm tra fix lỗi suggestion không nhận ổn định"
+        )
+
+        // 3. Screenshot scenario ("Grill-me kiểm tra fix lỗi suggestion bị lỗi không nhận ổn định cập nhật"):
+        // Must NEVER suggest duplicate "[⇥⇥ cập nhật]" when sentence already ends with "cập nhật",
+        // and MUST offer full-sentence contextual rewrite + next-word collocations after "cập nhật"
+        let screenshotSentence = "Grill-me kiểm tra fix lỗi suggestion bị lỗi không nhận ổn định cập nhật"
+        let screenshotWords = screenshotSentence.components(separatedBy: " ")
+        let postUpdateSuggestions = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: screenshotWords,
+            fullSentenceText: screenshotSentence,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertFalse(
+            postUpdateSuggestions.contains(where: { $0.text.lowercased() == "cập nhật" }),
+            "Must never re-suggest 'cập nhật' when the sentence already ends with 'cập nhật'"
+        )
+        XCTAssertTrue(
+            postUpdateSuggestions.contains(where: {
+                $0.kind == .aiPolish &&
+                $0.text == "Grill-me kiểm tra fix lỗi suggestion cập nhật không ổn định"
+            }),
+            "Expected contextual full-sentence rewrite, got: \(postUpdateSuggestions.map(\.text))"
+        )
+
+        // Also when cursor is touching the end of "nhật" (currentWord = "nhật", sentenceWords ending with "cập"):
+        let touchingNhatSuggestions = SuggestionEngine.suggest(
+            currentWord: "nhật",
+            rawWord: "nhaatj",
+            sentenceWords: Array(screenshotWords.dropLast()),
+            fullSentenceText: screenshotSentence,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertFalse(
+            touchingNhatSuggestions.contains(where: { $0.text.lowercased() == "cập nhật" }),
+            "Must not suggest 'cập nhật' when 'cập nhật' is already completed at the cursor"
+        )
+
+        // 4. User's '/grill-me kịch verify lỗi suggestion' scenario:
+        // - After typing "kịch ", suggest "bản" ("kịch bản")
+        let afterKichSuggestions = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: ["kịch"],
+            fullSentenceText: "kịch"
+        )
+        XCTAssertEqual(afterKichSuggestions.first?.text, "bản")
+
+        // - Full sentence "kịch verify lỗi suggestion" & "kịch veriaay lỗi suggestion" polish to "kịch bản verify lỗi suggestion"
+        XCTAssertEqual(
+            VietnameseTextPolisher.polish("kịch verify lỗi suggestion"),
+            "kịch bản verify lỗi suggestion"
+        )
+        XCTAssertEqual(
+            VietnameseTextPolisher.polish("kịch veriaay lỗi suggestion"),
+            "kịch bản verify lỗi suggestion"
+        )
+
+        // 5. Real-time Telex English typing for "verify" (both direct 'verify' and UniKey double-R escape 'verrify'),
+        // plus "service", "version", "target", "cursor"
+        let engine = VietnameseInputEngine(inputMethod: .telex, tonePlacement: .modern, autoEnglishRestore: true)
+        for ch in "verify" {
+            _ = engine.processKey(ch)
+        }
+        XCTAssertEqual(engine.formattedWord, "verify")
+        engine.reset()
+
+        for ch in "verrify" {
+            _ = engine.processKey(ch)
+        }
+        XCTAssertEqual(engine.formattedWord, "verify")
+        engine.reset()
+
+        for word in ["service", "version", "target", "cursor"] {
+            for ch in word {
+                _ = engine.processKey(ch)
+            }
+            XCTAssertEqual(engine.formattedWord, word)
+            engine.reset()
+        }
+    }
 }

@@ -334,8 +334,16 @@ public struct VietnameseTextPolisher: Sendable {
         "boi": "bởi",
         "texxt": "text",
         "tetx": "text",
+        "suge": "suggest",
+        "sugge": "suggest",
         "sugget": "suggest",
-        "sugest": "suggest"
+        "sugest": "suggest",
+        "sugestion": "suggestion",
+        "suggesti": "suggestion",
+        "suggestio": "suggestion",
+        "verif": "verify",
+        "veriaay": "verify",
+        "verrify": "verify"
     ]
 
     /// Rejoins shifted-space consonant endings (-ng, -nh, -ch) where Space was pressed 1 character early
@@ -455,6 +463,38 @@ public struct VietnameseTextPolisher: Sendable {
                 if verbFollowers.contains(nextLower) && !isPrecededByNounOrAdverb && !isPrecededByEnglish {
                     repairedTokens[idx] = (tok.first?.isUppercase == true) ? "Tôi" : "tôi"
                 }
+            }
+        }
+
+        // Full-Sentence Contextual Sliding-Window Pass (prevWord + currentWord + nextWord)
+        for idx in 0..<repairedTokens.count {
+            let tok = repairedTokens[idx]
+            var prefix = ""
+            var suffix = ""
+            var core = tok
+            while let first = core.first, first.isPunctuation {
+                prefix.append(first)
+                core.removeFirst()
+            }
+            while let last = core.last, last.isPunctuation {
+                suffix = String(last) + suffix
+                core.removeLast()
+            }
+            guard !core.isEmpty else { continue }
+            let prevCore = idx > 0 ? repairedTokens[idx - 1].trimmingCharacters(in: .punctuationCharacters) : nil
+            let nextCore = (idx + 1 < repairedTokens.count) ? repairedTokens[idx + 1].trimmingCharacters(in: .punctuationCharacters) : ""
+            if let ctxFix = SuggestionEngine.resolveContextualWordFix(
+                prevWord: prevCore,
+                currentWord: core,
+                wordAfterCursor: nextCore
+            ) {
+                let casedFix: String = {
+                    if let first = core.first, first.isUppercase, let rFirst = ctxFix.first {
+                        return rFirst.uppercased() + ctxFix.dropFirst()
+                    }
+                    return ctxFix
+                }()
+                repairedTokens[idx] = prefix + casedFix + suffix
             }
         }
         var joined = repairedTokens.joined(separator: " ")
@@ -687,7 +727,21 @@ public struct VietnameseTextPolisher: Sendable {
             ("cho\\s+english\\b", "cho English"),
             ("tiếng\\s+english\\b", "tiếng Anh"),
             ("và\\s+tiếng\\s+việt\\b", "và tiếng Việt"),
-            ("va\\s+tieng\\s+viet\\b", "và tiếng Việt")
+            ("va\\s+tieng\\s+viet\\b", "và tiếng Việt"),
+            ("cải\\s+tiếng\\b", "cải tiến"),
+            ("cai\\s+tieng\\b", "cải tiến"),
+            ("cai\\s+tien\\b", "cải tiến"),
+            ("cải\\s+tien\\b", "cải tiến"),
+            ("ổn\\s+địng\\b", "ổn định"),
+            ("ổn\\s+dinh\\b", "ổn định"),
+            ("on\\s+dinh\\b", "ổn định"),
+            ("fia\\s+lỗi\\b", "fix lỗi"),
+            ("fia\\s+loi\\b", "fix lỗi"),
+            ("vấn\\s+de\\b", "vấn đề"),
+            ("van\\s+de\\b", "vấn đề"),
+            ("ngữ\\s+canh\\b", "ngữ cảnh"),
+            ("ngu\\s+canh\\b", "ngữ cảnh"),
+            ("kịch\\s+(?=verify|test|kiểm\\s+tra|kiểm\\s+thử)\\b", "kịch bản ")
         ]
         for (wrong, right) in phraseRepairs {
             joined = joined.replacingOccurrences(of: "(?i)\\b" + wrong + "\\b", with: right, options: .regularExpression)
@@ -785,8 +839,12 @@ public struct VietnameseTextPolisher: Sendable {
             ("sữa\\s+chữa\\b", "sửa chữa"),
             ("lảng\\s+phí\\b", "lãng phí"),
             ("mải\\s+mãi\\b", "mãi mãi"),
-            // Redundant conjunctions
-            ("tuy\\s+nhiên\\s+nhưng\\b", "tuy nhiên")
+            // Redundant conjunctions & awkward contextual phrasing
+            ("tuy\\s+nhiên\\s+nhưng\\b", "tuy nhiên"),
+            ("cải\\s+tiếng\\b", "cải tiến"),
+            ("ổn\\s+địng\\b", "ổn định"),
+            ("không\\s+nhận\\s+ổn\\s+định\\s+cập\\s+nhật\\b", "cập nhật không ổn định"),
+            ("fix\\s+lỗi\\s+([a-zA-Z0-9_-]+)\\s+bị\\s+lỗi\\b", "fix lỗi $1")
         ]
 
         for (wrong, right) in vnGrammarRules {

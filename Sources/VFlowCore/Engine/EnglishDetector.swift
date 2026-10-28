@@ -101,7 +101,10 @@ public struct SmartEnglishDetector: Sendable {
         "need", "seed", "feed", "feel", "heel", "week", "seek", "book", "look",
         "took", "cook", "hook", "good", "food", "mood", "wood", "cool", "tool", "pool", "school",
         "down", "town", "door", "poor", "major", "floor", "brown", "clown", "dust",
-        "def", "ref"
+        "def", "ref",
+        "verify", "verified", "verifying", "verification", "verifier",
+        "suggest", "suggestion", "suggestions", "suggested", "suggesting",
+        "issue", "issues", "bug", "bugs", "stable", "unstable", "valid", "invalid", "active", "native"
     ]
 
     /// Short English words whose raw Telex keystrokes collide with valid Vietnamese words (e.g. "car" -> "cả", "bow" -> "bơ").
@@ -133,8 +136,8 @@ public struct SmartEnglishDetector: Sendable {
     /// Genuine English words or stems containing "rr", "ss", or "ff" that should preserve both consonants
     /// rather than collapsing as a UniKey-style Telex tone escape (unlike "arr"->"ar", "arry"->"ary", "ayrr"->"ayr", "toanss"->"toans").
     private static let genuineDoubleConsonantStems: [String] = [
-        // Genuine "rr" stems & words (excluding "arr" and "arry" which are Telex escapes for "ar" / "ary")
-        "arra", "arre", "arri", "arro", "err", "carr", "marr", "harr", "parr", "tarr", "starr", "quarr",
+        // Genuine "rr" stems & words (excluding "arr", "arry", "verr", "serr", "herr" which are Telex escapes)
+        "arra", "arre", "arri", "arro", "erro", "errand", "errat", "carr", "marr", "harr", "parr", "tarr", "starr", "quarr",
         "berr", "cherr", "ferr", "merr", "jerr", "terr", "perr", "sorr", "worr", "lorr", "hurr", "flurr",
         "curr", "furr", "blurr", "slurr", "scurr", "corr", "overr", "mirr", "horr", "borr", "tomorr",
         "narr", "marrow", "sparr", "barr", "warr", "torr", "surr", "interr", "irr", "referr", "occurr",
@@ -156,7 +159,7 @@ public struct SmartEnglishDetector: Sendable {
         "progressive", "impressive", "expressive", "excessive", "lesson", "vessel", "fossil", "gossip",
         "blossom", "possum", "russian", "cassette", "chassis", "dossier", "dessert", "ness",
         // Genuine "ff" stems & words
-        "off", "iff", "diff", "buff", "cuff", "puff", "muff", "ruff", "bluff", "fluff", "scuff", "snuff",
+        "office", "offer", "offset", "offend", "offi", "diff", "buff", "cuff", "puff", "muff", "ruff", "bluff", "fluff", "scuff", "snuff",
         "stuff", "staff", "stiff", "cliff", "whiff", "skiff", "sniff", "sheriff", "tariff", "plaintiff",
         "bailiff", "suffer", "effe", "affe", "effo", "affo", "affa", "affi", "affl", "afflu", "coff",
         "toff", "muffin", "puffin", "baffl", "raffl", "waffl", "shuffl", "truffl", "scuffl", "muffl",
@@ -167,6 +170,9 @@ public struct SmartEnglishDetector: Sendable {
     public static func isGenuineEnglishDoubleConsonantWord(_ rawWord: String) -> Bool {
         let clean = rawWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard clean.count >= 3 else { return false }
+        if clean == "err" || clean == "off" || clean == "iff" {
+            return true
+        }
 
         // 1. Starts with non-Vietnamese initial or English-only initial cluster
         if let first = clean.first, ["f", "j", "z", "w"].contains(first) {
@@ -289,6 +295,19 @@ public struct SmartEnglishDetector: Sendable {
         // in an unmodified word (e.g. "ary", "ory", "ery", "ury", "are", "use", "base", "safe", "easy", "busy", "vary", "diary")
         if hasIntervocalicTelexToneInUnmodifiedWord(clean) {
             return true
+        }
+
+        // 6. Contains an impossible Vietnamese post-vocalic 'r' + consonant cluster in an unmodified word
+        // (e.g. "service", "server", "version", "target", "cursor", "merge", "perform", "parser", "work", "word", "world")
+        let hasUnambiguousTelexMarkers = clean.contains("ee") || clean.contains("oo") ||
+            clean.contains("aa") || clean.contains("dd") || clean.contains("w")
+        if !hasUnambiguousTelexMarkers && clean.count >= 4 {
+            let englishRClusters = ["rv", "rg", "rk", "rd", "rl", "rb", "rf", "rs"]
+            for cluster in englishRClusters {
+                if clean.contains(cluster) {
+                    return true
+                }
+            }
         }
 
         return false

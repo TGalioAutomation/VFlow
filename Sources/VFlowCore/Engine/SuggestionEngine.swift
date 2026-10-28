@@ -157,8 +157,16 @@ public struct SuggestionEngine: Sendable {
         "ghọi": "gọi",
         "texxt": "text",
         "tetx": "text",
+        "suge": "suggest",
+        "sugge": "suggest",
         "sugget": "suggest",
         "sugest": "suggest",
+        "sugestion": "suggestion",
+        "suggesti": "suggestion",
+        "suggestio": "suggestion",
+        "verif": "verify",
+        "veriaay": "verify",
+        "verrify": "verify",
         "vaule": "value",
         "informations": "information",
         "advices": "advice",
@@ -261,7 +269,7 @@ public struct SuggestionEngine: Sendable {
         "ma|lai": "lại",
         "lại|khong": "không",
         "lai|khong": "không",
-        // Vietnamese orthographic & grammar bigram fixes
+        // Vietnamese orthographic, compound & grammar bigram fixes
         "suy|ngĩ": "nghĩ",
         "suy|nghỉ": "nghĩ",
         "công|ngệ": "nghệ",
@@ -269,6 +277,48 @@ public struct SuggestionEngine: Sendable {
         "đề|ngị": "nghị",
         "ý|ngĩa": "nghĩa",
         "cập|nhập": "nhật",
+        "cập|nhat": "nhật",
+        "cập|nhât": "nhật",
+        "cap|nhat": "nhật",
+        "cải|tiếng": "tiến",
+        "cải|tieng": "tiến",
+        "cải|tien": "tiến",
+        "cai|tieng": "tiến",
+        "cai|tien": "tiến",
+        "cải|thiên": "thiện",
+        "cải|thien": "thiện",
+        "ổn|địng": "định",
+        "ổn|dinh": "định",
+        "ổn|đinh": "định",
+        "on|dinh": "định",
+        "on|địng": "định",
+        "mặc|địng": "định",
+        "mặc|dinh": "định",
+        "xác|địng": "định",
+        "xác|dinh": "định",
+        "quyết|địng": "định",
+        "quyết|dinh": "định",
+        "nhận|diên": "diện",
+        "nhận|dien": "diện",
+        "nhận|địng": "định",
+        "nhận|dinh": "định",
+        "ngữ|canh": "cảnh",
+        "ngu|canh": "cảnh",
+        "ngữ|phap": "pháp",
+        "ngu|phap": "pháp",
+        "kịch|ban": "bản",
+        "kich|ban": "bản",
+        "vấn|de": "đề",
+        "van|de": "đề",
+        "tra|fia": "fix",
+        "cần|fia": "fix",
+        "đang|fia": "fix",
+        "thử|fia": "fix",
+        "kịch|veriaay": "verify",
+        "kịch|verif": "verify",
+        "kịch|veri": "verify",
+        "bản|veriaay": "verify",
+        "bản|verif": "verify",
         "xác|xuất": "suất",
         "sản|suất": "xuất",
         "bổ|xung": "sung",
@@ -354,6 +404,28 @@ public struct SuggestionEngine: Sendable {
         return dp[n]
     }
 
+    /// Contextual right-neighbor overrides (`currentWord|nextWord -> corrected currentWord`).
+    public static let contextualRightBigramWordFixes: [String: String] = [
+        "fia|lỗi": "fix",
+        "fia|loi": "fix",
+        "fia|bug": "fix",
+        "fia|issue": "fix",
+        "fia|error": "fix",
+        "veriaay|lỗi": "verify",
+        "verif|lỗi": "verify",
+        "veri|lỗi": "verify",
+        "phân|suggest": "phần",
+        "phan|suggest": "phần",
+        "phân|gợi": "phần",
+        "phan|mem": "phần",
+        "phan|mềm": "phần",
+        "sử|lý": "xử",
+        "su|ly": "xử",
+        "xử|dụng": "sử",
+        "giành|thời": "dành",
+        "giành|cho": "dành"
+    ]
+
     /// Resolves contextual single-word typo or diacritic restoration using the preceding word (and optional following word).
     public static func resolveContextualWordFix(
         prevWord: String?,
@@ -384,6 +456,11 @@ public struct SuggestionEngine: Sendable {
             return "tôi"
         }
 
+        // Right-neighbor contextual check (e.g. "fia lỗi" -> "fix", "veriaay lỗi" -> "verify", "phân suggest" -> "phần")
+        if !cleanAfter.isEmpty, let rightFix = contextualRightBigramWordFixes["\(cleanCurrent)|\(cleanAfter)"] {
+            return rightFix
+        }
+
         guard let validPrev = rawPrev, !validPrev.isEmpty else {
             return nil
         }
@@ -399,24 +476,36 @@ public struct SuggestionEngine: Sendable {
             return normMatch
         }
 
-        // Check nextWordCollocations for unsigned/wrong-tone match or 1-key typo match
+        // Check nextWordCollocations for unsigned/wrong-tone match or 1-key typo match (when ASCII or malformed syllable)
         if !isCauException, let collocations = nextWordCollocations[normPrev] ?? nextWordCollocations[validPrev] {
-            let strippedCurrent = stripDiacritics(cleanCurrent)
-            for cand in collocations where !cand.contains(" ") {
-                let candLower = cand.lowercased()
-                let strippedCand = stripDiacritics(candLower)
-                if strippedCand == strippedCurrent && candLower != cleanCurrent {
-                    return cand
-                }
+            let singleWordCollocations = collocations.filter { !$0.contains(" ") }
+            if singleWordCollocations.contains(where: { $0.lowercased() == cleanCurrent }) {
+                return nil
             }
-            // If currentWord is pure ASCII of length >= 3, check 1-char edit distance against collocation followers
             let isPureASCII = cleanCurrent.unicodeScalars.allSatisfy { $0.value <= 127 }
-            if isPureASCII && cleanCurrent.count >= 3 {
-                for cand in collocations where !cand.contains(" ") {
+            let isMalformedSyllable = !SyllableParser.isValidVietnameseSyllable(
+                raw: cleanCurrent,
+                formatted: cleanCurrent,
+                isWordBoundary: true
+            )
+            let strippedCurrent = stripDiacritics(cleanCurrent)
+            if isPureASCII || isMalformedSyllable {
+                for cand in singleWordCollocations {
                     let candLower = cand.lowercased()
                     let strippedCand = stripDiacritics(candLower)
-                    if strippedCand.count == cleanCurrent.count && asciiEditDistance(strippedCand, cleanCurrent) == 1 {
+                    if strippedCand == strippedCurrent && candLower != cleanCurrent {
                         return cand
+                    }
+                }
+                if strippedCurrent.count >= 3 {
+                    for cand in singleWordCollocations {
+                        let candLower = cand.lowercased()
+                        let strippedCand = stripDiacritics(candLower)
+                        if strippedCand.count == strippedCurrent.count &&
+                           strippedCand.first == strippedCurrent.first &&
+                           asciiEditDistance(strippedCand, strippedCurrent) == 1 {
+                            return cand
+                        }
                     }
                 }
             }
@@ -427,19 +516,19 @@ public struct SuggestionEngine: Sendable {
     /// High-frequency Vietnamese words & compound phrases for instant prefix completion.
     public static let vietnamesePhrases: [String] = [
         "hiển thị", "hiển thị đầy đủ", "hiển thị được", "hiệu ứng", "hiện tại", "hệ thống", "hỗ trợ", "hoàn thành", "hoạt động", "hướng dẫn", "hết", "hết text",
-        "không", "không hiển thị", "không được", "không thể", "không biết", "khắc phục", "khởi động", "kiểm tra", "kiểm thử", "kết quả", "kết nối",
+        "không", "không hiển thị", "không được", "không thể", "không biết", "khắc phục", "khởi động", "kiểm tra", "kiểm thử", "kịch bản", "kịch bản kiểm thử", "kết quả", "kết nối",
         "được", "được hết", "đạt", "đạt yêu cầu", "đã", "đang", "đồng bộ", "đóng gói", "đường dẫn", "đưa ra",
         "chưa", "chưa đạt", "chưa được", "chưa ổn", "chức năng", "chương trình", "chỉnh sửa", "chính xác", "chuyển đổi", "chạy",
         "phần", "phần gợi ý", "phần hiển thị", "phần mềm", "phát triển", "phiên bản", "phím tắt", "phản hồi",
         "bị", "bị lỗi", "bị sai", "bình thường", "bổ sung", "bắt đầu", "bây giờ", "bàn phím", "báo cáo",
         "lỗi", "lỗi hiển thị", "làm mượt", "lập trình", "lựa chọn", "luôn",
         "gõ", "gõ tiếng Việt", "gợi ý", "gợi ý từ", "giải pháp", "giúp", "giao diện",
-        "cần", "cần hỗ trợ", "cập nhật", "cài đặt", "cấu hình", "cảm ơn", "cải thiện", "công nghệ",
+        "cần", "cần hỗ trợ", "cập nhật", "cài đặt", "cấu hình", "cảm ơn", "cải tiến", "cải thiện", "công nghệ",
         "tiếng Việt", "tiếng Anh", "tiếp tục", "tiến độ", "tính năng", "tự động", "tối ưu", "tốt", "tạo", "tìm kiếm",
         "xử lý", "xác nhận", "xây dựng", "xem", "xong", "xin cảm ơn", "xin chào",
         "và", "vào", "vấn đề", "vẫn", "với", "về", "vậy", "văn bản", "vui lòng",
-        "ứng dụng", "ưu tiên",
-        "người dùng", "nguyên nhân", "nhanh chóng", "như thế nào", "nhưng", "nhiều", "nội dung",
+        "ứng dụng", "ưu tiên", "ổn định",
+        "người dùng", "nguyên nhân", "ngữ cảnh", "nhận diện", "nhanh chóng", "như thế nào", "nhưng", "nhiều", "nội dung",
         "mặc định", "môi trường", "mới", "mở", "màn hình",
         "sử dụng", "sửa lỗi", "sẵn sàng",
         "thực hiện", "thành công", "thêm", "thay đổi", "thông minh", "thử nghiệm", "thị",
@@ -465,7 +554,16 @@ public struct SuggestionEngine: Sendable {
         "hoạt động": ["tốt", "ổn định", "bình thường"],
         "đang hoạt": ["động", "động tốt"],
         "thực sự": ["có", "tốt", "hoạt động tốt"],
-        "thực tế": ["có", "đang", "hoạt động"]
+        "thực tế": ["có", "đang", "hoạt động"],
+        "vấn đề": ["ngữ cảnh", "hiển thị", "cần cải tiến"],
+        "ngữ cảnh": ["cần cải tiến", "câu", "thông minh"],
+        "cần cải": ["tiến", "thiện"],
+        "không nhận": ["diện", "ổn định", "được"],
+        "ổn định": ["hơn", "khi cập nhật", "rồi"],
+        "cập nhật": ["ổn định", "thành công", "lại"],
+        "kiểm tra": ["fix lỗi", "lại", "kịch bản"],
+        "fix lỗi": ["suggestion", "hiển thị", "ngữ cảnh"],
+        "kịch bản": ["verify lỗi", "kiểm thử", "test"]
     ]
 
     /// Single-Word (Unigram) Next-word collocations following a completed word.
@@ -499,7 +597,7 @@ public struct SuggestionEngine: Sendable {
         "hỗ": ["trợ", "trợ thêm", "trợ tiếng Việt"],
         "hiệu": ["ứng", "suất", "quả"],
         "tiếng": ["Việt", "Anh", "Việt và tiếng Anh"],
-        "cần": ["hỗ trợ", "xử lý", "kiểm tra"],
+        "cần": ["hỗ trợ", "xử lý", "kiểm tra", "cải tiến"],
         "xử": ["lý", "lý ngay", "lý lỗi"],
         "kiểm": ["tra", "thử", "tra lại"],
         "cài": ["đặt", "đặt thêm"],
@@ -523,22 +621,35 @@ public struct SuggestionEngine: Sendable {
         "ơn": ["bạn", "nhiều"],
         "xin": ["cảm ơn", "chào", "lỗi"],
         "đã": ["OK", "hoàn thành", "xong"],
-        "gợi": ["ý", "ý từ", "ý thông minh"]
+        "gợi": ["ý", "ý từ", "ý thông minh"],
+        "ổn": ["định", "thỏa"],
+        "định": ["cập nhật", "hơn", "lại"],
+        "cập": ["nhật", "nhật lại"],
+        "nhật": ["ổn định", "thành công", "ngay"],
+        "cải": ["tiến", "thiện", "tạo"],
+        "ngữ": ["cảnh", "pháp", "nghĩa"],
+        "cảnh": ["cần cải tiến", "câu", "sử dụng"],
+        "vấn": ["đề"],
+        "đề": ["ngữ cảnh", "hiển thị", "này"],
+        "kịch": ["bản", "bản verify", "bản kiểm thử"],
+        "nhận": ["diện", "định", "được"],
+        "verify": ["lỗi", "lỗi suggestion", "kịch bản"],
+        "fix": ["lỗi", "lỗi suggestion", "bug"]
     ]
 
     /// High-frequency English technical & everyday words for prefix completion.
     public static let englishCompletions: [String] = [
         "suggest", "suggestion", "suggestions", "support", "system", "settings", "service", "server", "screen", "search", "status",
-        "value", "values", "validation", "version", "view", "vietnamese",
-        "text", "textarea", "testing", "terminal", "typescript", "token",
-        "function", "feature", "features", "frontend", "framework",
-        "component", "configuration", "context", "controller",
-        "interface", "implementation", "input", "install", "integration",
+        "value", "values", "validation", "verify", "verified", "verification", "version", "view", "vietnamese",
+        "text", "textarea", "testing", "terminal", "typescript", "token", "tab",
+        "fix", "fixed", "focus", "function", "feature", "features", "frontend", "framework",
+        "component", "configuration", "context", "controller", "chrome", "check", "click",
+        "interface", "implementation", "input", "install", "integration", "issue",
         "performance", "platform", "plugin", "project", "process",
         "developer", "database", "default", "design", "document",
         "application", "architecture", "assistant", "autocomplete", "async",
         "window", "workflow", "workspace",
-        "english", "environment", "error", "event"
+        "english", "environment", "error", "event", "update", "browser"
     ]
 
     /// Missing bridge words when the cursor is placed between two words (e.g. "không | thị" -> "hiển").
@@ -553,7 +664,10 @@ public struct SuggestionEngine: Sendable {
         "thực|có": "sự",
         "thực|co": "sự",
         "thực|đang": "sự",
-        "hoạt|tốt": "động"
+        "hoạt|tốt": "động",
+        "kịch|verify": "bản",
+        "kịch|test": "bản",
+        "kịch|kiểm": "bản"
     ]
 
     /// Resolves missing bridge words between two words, handling direct pairs, shorthand/teencode, and unsigned variations.
@@ -757,16 +871,6 @@ public struct SuggestionEngine: Sendable {
         var items: [SuggestionItem] = []
         var seen: Set<String> = []
 
-        func add(_ item: SuggestionItem) {
-            let key = item.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !key.isEmpty,
-                  key != currentWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                  !seen.contains(key),
-                  items.count < 3 else { return }
-            seen.insert(key)
-            items.append(item)
-        }
-
         let trimmedCurrent = currentWord.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRaw = rawWord.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidateFullSentence: String = {
@@ -774,6 +878,27 @@ public struct SuggestionEngine: Sendable {
             if !cleanFull.isEmpty { return cleanFull }
             return (sentenceWords + (trimmedCurrent.isEmpty ? [] : [trimmedCurrent])).joined(separator: " ")
         }()
+        let cleanCandidateLower = candidateFullSentence
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: .punctuationCharacters)
+            .lowercased()
+
+        func add(_ item: SuggestionItem) {
+            let key = item.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !key.isEmpty,
+                  key != trimmedCurrent.lowercased(),
+                  !seen.contains(key),
+                  items.count < 3 else { return }
+
+            // Prevent suggesting a phrase or next-word that already exists at the end of the sentence
+            if item.kind != .aiPolish && !item.replaceLastCompletedWord {
+                if cleanCandidateLower == key || cleanCandidateLower.hasSuffix(" " + key) {
+                    return
+                }
+            }
+            seen.insert(key)
+            items.append(item)
+        }
 
         let effectiveTone: PolishTone = {
             switch OnDeviceAIEngine.activeSystemPromptPreset {
