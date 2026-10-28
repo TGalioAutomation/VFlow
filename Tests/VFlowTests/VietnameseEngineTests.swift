@@ -588,4 +588,134 @@ final class VietnameseEngineTests: XCTestCase {
             value: "Xin chào Việt Nam"
         ))
     }
+
+    @MainActor
+    func testMouseClickHUDHitTestAndCustomDoubleTabShortcuts() async {
+        // 1. User's screenshot case: "không can thiet phải nhu the"
+        let polishedScreenshot = VietnameseTextPolisher.polish("không can thiet phải nhu the")
+        XCTAssertEqual(polishedScreenshot.lowercased(), "không cần thiết phải như thế")
+
+        let screenshotSeverity = SuggestionEngine.evaluateSeverity(
+            rawSentence: "không can thiet phải nhu the",
+            preset: .standard
+        )
+        XCTAssertEqual(screenshotSeverity, .high)
+
+        let screenshotSuggestions = SuggestionEngine.suggest(
+            currentWord: "the",
+            rawWord: "the",
+            sentenceWords: ["không", "can", "thiet", "phải", "nhu"],
+            fullSentenceText: "không can thiet phải nhu the",
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(screenshotSuggestions.first?.kind, .aiPolish)
+        XCTAssertEqual(screenshotSuggestions.first?.severity, .high)
+        XCTAssertEqual(screenshotSuggestions.first?.text.lowercased(), "không cần thiết phải như thế")
+
+        // 2. Verify CaretHUDModel mouse click hit-testing (dispatchHitTest) on suggestion chips & buttons
+        let hud = CaretHUDModel.shared
+        hud.suggestions = [
+            SuggestionItem(text: "Không cần thiết phải như thế", kind: .aiPolish, replaceCurrentWord: false, severity: .high),
+            SuggestionItem(text: "thế", kind: .teencodeExpansion, replaceCurrentWord: true, targetWordToReplace: "the", severity: .high)
+        ]
+        hud.chipFrames = [
+            0: CGRect(x: 112, y: 8, width: 220, height: 34),
+            1: CGRect(x: 340, y: 8, width: 70, height: 34)
+        ]
+        hud.modeButtonFrame = CGRect(x: 64, y: 10, width: 42, height: 28)
+
+        let clickExpectation = expectation(description: "Mouse click on HUD suggestion chip #1")
+        var clickedItem: SuggestionItem?
+        hud.onSelectSuggestion = { item in
+            clickedItem = item
+            clickExpectation.fulfill()
+        }
+
+        let handled = hud.dispatchHitTest(at: CGPoint(x: 180, y: 24), windowSize: CGSize(width: 520, height: 52))
+        XCTAssertTrue(handled)
+        await fulfillment(of: [clickExpectation], timeout: 1.0)
+        XCTAssertEqual(clickedItem?.text, "Không cần thiết phải như thế")
+
+        // 3. Verify Customizable Suggestion Accept Shortcut modes (.doubleTab, .singleTab, .rightArrow, .shiftReturn, .optionNumbers)
+        let hook = EventTapHook()
+        var selectedShortcutIndex: Int?
+        var armedState: Bool = false
+        hook.hasActiveSuggestions = { true }
+        hook.onSelectSuggestionShortcut = { idx in
+            MainActor.assumeIsolated {
+                selectedShortcutIndex = idx
+            }
+            return true
+        }
+        hook.onDoubleTabArmedChanged = { isArmed in
+            MainActor.assumeIsolated {
+                armedState = isArmed
+            }
+        }
+
+        // 3A. Double-Tab (.doubleTab = ⇥⇥): 1st Tab arms, 2nd Tab within 500ms selects Slot #1 (index 0)
+        hook.suggestionAcceptShortcut = .doubleTab
+        selectedShortcutIndex = nil
+        let firstTabConsumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Tab,
+            flags: [],
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(firstTabConsumed, "1st Tab in Double-Tab mode must be swallowed to keep focus inside active input")
+        XCTAssertTrue(armedState, "1st Tab must arm Double-Tab indicator")
+        XCTAssertNil(selectedShortcutIndex, "1st Tab alone must not trigger suggestion selection yet")
+
+        let secondTabConsumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Tab,
+            flags: [],
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(secondTabConsumed, "2nd Tab in Double-Tab mode must be consumed")
+        XCTAssertFalse(armedState, "2nd Tab must disarm Double-Tab indicator")
+        XCTAssertEqual(selectedShortcutIndex, 0, "2nd Tab must immediately select Suggestion #1 (index 0)")
+
+        // 3B. Single-Tab (.singleTab = ⇥): 1st Tab immediately selects Slot #1 (index 0)
+        hook.suggestionAcceptShortcut = .singleTab
+        selectedShortcutIndex = nil
+        let singleTabConsumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Tab,
+            flags: [],
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(singleTabConsumed)
+        XCTAssertEqual(selectedShortcutIndex, 0)
+
+        // 3C. Right Arrow (.rightArrow = →): 0x7C immediately selects Slot #1 (index 0)
+        hook.suggestionAcceptShortcut = .rightArrow
+        selectedShortcutIndex = nil
+        let arrowConsumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: 0x7C,
+            flags: [],
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(arrowConsumed)
+        XCTAssertEqual(selectedShortcutIndex, 0)
+
+        // 3D. Shift + Return (.shiftReturn = ⇧↩): Return with .maskShift selects Slot #1
+        hook.suggestionAcceptShortcut = .shiftReturn
+        selectedShortcutIndex = nil
+        let shiftReturnConsumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_Return,
+            flags: .maskShift,
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(shiftReturnConsumed)
+        XCTAssertEqual(selectedShortcutIndex, 0)
+
+        // 3E. Option + 2 (⌥2) works in all modes
+        hook.suggestionAcceptShortcut = .optionNumbers
+        selectedShortcutIndex = nil
+        let opt2Consumed = hook.handleSuggestionShortcutKeyDown(
+            keycode: KeyCodeMap.kVK_ANSI_2,
+            flags: .maskAlternate,
+            replaySingleTabOnTimeout: false
+        )
+        XCTAssertTrue(opt2Consumed)
+        XCTAssertEqual(selectedShortcutIndex, 1)
+    }
 }

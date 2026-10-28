@@ -130,6 +130,37 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let next: InputMethod = (current == .off) ? .telex : .off
             VFlowControlCenterStore.shared.inputMethod = next
         }
+        CaretHUDModel.shared.onCycleTone = { [weak self] in
+            let allTones = PolishTone.allCases
+            let current = VFlowControlCenterStore.shared.currentTone
+            if let idx = allTones.firstIndex(of: current) {
+                let nextTone = allTones[(idx + 1) % allTones.count]
+                VFlowControlCenterStore.shared.currentTone = nextTone
+                EventTapHook.shared.notifyTypingState()
+                _ = self
+            }
+        }
+        CaretHUDModel.shared.onUndo = {
+            EventTapHook.shared.postSyntheticKey(KeyCodeMap.kVK_ANSI_Z, flags: .maskCommand)
+        }
+
+        EventTapHook.shared.onHUDMouseDown = { screenPoint in
+            MainActor.assumeIsolated {
+                CaretPillWindow.shared.handleMouseDown(atScreenPoint: screenPoint)
+            }
+        }
+
+        EventTapHook.shared.hasActiveSuggestions = {
+            MainActor.assumeIsolated {
+                CaretPillWindow.shared.isVisible && !CaretHUDModel.shared.visibleSuggestions.isEmpty
+            }
+        }
+
+        EventTapHook.shared.onDoubleTabArmedChanged = { isArmed in
+            Task { @MainActor in
+                CaretHUDModel.shared.isDoubleTabArmed = isArmed
+            }
+        }
 
         EventTapHook.shared.onTypingStateChanged = { [weak self] composingWord, rawWord, sentenceWords, method, fullSentenceText, wordAfterCursor in
             Task { @MainActor in
@@ -146,7 +177,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         EventTapHook.shared.onSelectSuggestionShortcut = { index in
             MainActor.assumeIsolated {
-                let suggestions = CaretHUDModel.shared.suggestions
+                let suggestions = CaretHUDModel.shared.visibleSuggestions
                 guard index >= 0 && index < suggestions.count else { return false }
                 let chosen = suggestions[index]
                 DispatchQueue.main.async {

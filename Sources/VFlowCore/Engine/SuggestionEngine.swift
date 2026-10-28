@@ -8,6 +8,62 @@ public enum SuggestionKind: String, Equatable, Sendable {
     case aiPolish
 }
 
+/// Configurable keyboard shortcut mode for accepting the primary suggestion (#1) on the Caret Pill HUD.
+public enum SuggestionAcceptShortcut: String, CaseIterable, Identifiable, Sendable {
+    case doubleTab = "doubleTab"
+    case singleTab = "singleTab"
+    case rightArrow = "rightArrow"
+    case shiftReturn = "shiftReturn"
+    case optionNumbers = "optionNumbers"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .doubleTab:
+            return "Nhấn nhanh Tab + Tab (⇥⇥)"
+        case .singleTab:
+            return "Nhấn 1 lần Tab (⇥)"
+        case .rightArrow:
+            return "Phím Mũi tên phải (→)"
+        case .shiftReturn:
+            return "Shift + Enter (⇧↩)"
+        case .optionNumbers:
+            return "Chỉ dùng ⌥1 / ⌥2 / ⌥3"
+        }
+    }
+
+    public var shortBadge: String {
+        switch self {
+        case .doubleTab:
+            return "⇥⇥"
+        case .singleTab:
+            return "⇥"
+        case .rightArrow:
+            return "→"
+        case .shiftReturn:
+            return "⇧↩"
+        case .optionNumbers:
+            return "⌥1"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .doubleTab:
+            return "Nhấn đúp Tab nhanh (≤ 400ms) để dùng gợi ý — Tránh kẹt phím Tab đơn khi chuyển ô hoặc thụt lề"
+        case .singleTab:
+            return "Nhấn 1 lần phím Tab để chèn ngay gợi ý đầu tiên (#1)"
+        case .rightArrow:
+            return "Nhấn phím Mũi tên phải (→) để chèn ngay gợi ý đầu tiên (#1)"
+        case .shiftReturn:
+            return "Nhấn Shift + Enter để chèn gợi ý mà không gửi tin nhắn"
+        case .optionNumbers:
+            return "Tắt phím nhanh đơn, chỉ dùng ⌥1 / ⌥2 / ⌥3 hoặc Click chuột trực tiếp"
+        }
+    }
+}
+
 /// A single actionable suggestion chip displayed in the Caret Pill HUD.
 public struct SuggestionItem: Equatable, Identifiable, Sendable {
     public let id: String
@@ -149,7 +205,17 @@ public struct SuggestionEngine: Sendable {
         "bàn|phim": "phím",
         "ban|phim": "phím",
         "phím|tat": "tắt",
-        "phim|tat": "tắt"
+        "phim|tat": "tắt",
+        "không|can": "cần",
+        "khong|can": "cần",
+        "cần|thiet": "thiết",
+        "can|thiet": "thiết",
+        "phải|nhu": "như",
+        "phai|nhu": "như",
+        "như|the": "thế",
+        "nhu|the": "thế",
+        "thế|nao": "nào",
+        "the|nao": "nào"
     ]
 
     /// Computes ASCII edit distance between two short strings.
@@ -514,16 +580,19 @@ public struct SuggestionEngine: Sendable {
         return .normal
     }
 
-    /// Promotes the full-sentence `.aiPolish` suggestion (`✨`) to Slot #1 (`⇥ Tab`) when `severity == .high`.
+    /// Promotes the full-sentence `.aiPolish` suggestion (`✨`) to Slot #1 (`⇥` / `⇥⇥`) when `severity == .high`
+    /// or when `severity == .moderate` and Slot #1 is only a generic `.wordCompletion`.
     public static func prioritizeForSeverity(
         _ items: [SuggestionItem],
         severity: SuggestionSeverity
     ) -> [SuggestionItem] {
-        guard severity == .high,
-              let aiIndex = items.firstIndex(where: { $0.kind == .aiPolish }),
+        guard let aiIndex = items.firstIndex(where: { $0.kind == .aiPolish }),
               aiIndex > 0 else {
             return items
         }
+        let shouldPromote = (severity == .high) ||
+            (severity == .moderate && items.first?.kind == .wordCompletion)
+        guard shouldPromote else { return items }
         var reordered = items
         let aiItem = reordered.remove(at: aiIndex)
         reordered.insert(aiItem, at: 0)

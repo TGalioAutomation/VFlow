@@ -438,8 +438,8 @@ public struct BentoSettingsView: View {
                             keys: "⌥ Z"
                         )
                         shortcutRow(
-                            title: "Chọn nhanh gợi ý 1 / 2 / 3 trên thanh Caret Pill",
-                            keys: "⌃1  ⌃2  ⌃3"
+                            title: "Chọn gợi ý #1 hoặc gợi ý 1 / 2 / 3 trên Caret Pill",
+                            keys: "\(store.suggestionAcceptShortcut.shortBadge)  •  ⌥1 ⌥2 ⌥3  •  Click"
                         )
                         shortcutRow(
                             title: "Thu âm giọng nói Push-to-Talk (VI + EN)",
@@ -527,6 +527,57 @@ public struct BentoSettingsView: View {
                             }
                             .pickerStyle(.segmented)
                         }
+                    }
+
+                    Divider().background(Color.white.opacity(0.08))
+
+                    // Custom Suggestion Accept Shortcut Selector
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Phím tắt chọn nhanh Gợi ý #1 trên thanh Caret Pill (kèm Click chuột & ⌥1/⌥2/⌥3)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.85))
+                            Spacer()
+                            Text("Đang dùng: \(store.suggestionAcceptShortcut.displayName)")
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .foregroundColor(VFlowTheme.cyanAccent)
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach(SuggestionAcceptShortcut.allCases) { mode in
+                                let isSelected = store.suggestionAcceptShortcut == mode
+                                Button(action: { store.suggestionAcceptShortcut = mode }) {
+                                    HStack(spacing: 5) {
+                                        Text(mode.shortBadge)
+                                            .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                            .foregroundColor(isSelected ? VFlowTheme.cyanAccent : .white.opacity(0.65))
+                                        Text(mode.displayName)
+                                            .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                                            .foregroundColor(isSelected ? .white : .white.opacity(0.78))
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        isSelected
+                                            ? VFlowTheme.cyanAccent.opacity(0.20)
+                                            : Color.white.opacity(0.05)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .stroke(
+                                                isSelected ? VFlowTheme.cyanAccent.opacity(0.6) : Color.white.opacity(0.1),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Text(store.suggestionAcceptShortcut.subtitle)
+                            .font(.system(size: 10.5))
+                            .foregroundColor(.white.opacity(0.62))
                     }
 
                     Divider().background(Color.white.opacity(0.08))
@@ -1151,6 +1202,7 @@ public struct BentoSettingsView: View {
                                 suggestions: sandboxSuggestions,
                                 inputMethod: store.inputMethod,
                                 severity: sandboxSeverity,
+                                acceptShortcut: store.suggestionAcceptShortcut,
                                 onUndo: {
                                     sandboxText = "to đang thu go tieng viet không cau"
                                     recomputeSandboxSuggestions(for: sandboxText)

@@ -371,7 +371,14 @@ public actor OnDeviceAIEngine {
                     .trimmingCharacters(in: .punctuationCharacters)
 
                 let llmSeverity = SuggestionSeverity(rawValue: max(0, min(2, response.content.severityLevel))) ?? .normal
-                let finalSeverity = max(heuristicSeverity, llmSeverity)
+                let postLLMHeuristicSeverity = SuggestionEngine.evaluateSeverity(
+                    rawSentence: trimmed,
+                    polishedSentence: validatedPolished,
+                    tone: effectiveTone,
+                    preset: Self.activeSystemPromptPreset,
+                    customPrompt: Self.customSystemPrompt
+                )
+                let finalSeverity = max(heuristicSeverity, max(postLLMHeuristicSeverity, llmSeverity))
 
                 let res = OnDeviceAIResult(
                     polishedSentence: validatedPolished,
@@ -499,11 +506,19 @@ public actor OnDeviceAIEngine {
                             candidate.removeLast()
                         }
                         let validated = Self.isValidRefinement(base: basePolished, candidate: candidate) ? candidate : basePolished
+                        let postLLMHeuristicSeverity = SuggestionEngine.evaluateSeverity(
+                            rawSentence: rawInput,
+                            polishedSentence: validated,
+                            tone: tone,
+                            preset: Self.activeSystemPromptPreset,
+                            customPrompt: Self.customSystemPrompt
+                        )
+                        let effectiveFinalSeverity = max(finalSeverity, postLLMHeuristicSeverity)
                         continuation.resume(
                             returning: OnDeviceAIResult(
                                 polishedSentence: validated,
                                 nextWord: nextW,
-                                severity: finalSeverity
+                                severity: effectiveFinalSeverity
                             )
                         )
                         return

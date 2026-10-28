@@ -22,9 +22,19 @@ public final class EventTapHook: @unchecked Sendable {
         get { lock.withLock { _lastActiveVietnameseMethod } }
         set { lock.withLock { _lastActiveVietnameseMethod = newValue } }
     }
+
+    private var _suggestionAcceptShortcut: SuggestionAcceptShortcut = .doubleTab
+    public var suggestionAcceptShortcut: SuggestionAcceptShortcut {
+        get { lock.withLock { _suggestionAcceptShortcut } }
+        set { lock.withLock { _suggestionAcceptShortcut = newValue } }
+    }
+
     public var onInputMethodChanged: (@Sendable (InputMethod) -> Void)?
     public var onTypingStateChanged: (@Sendable (_ currentWord: String, _ rawWord: String, _ sentenceWords: [String], _ inputMethod: InputMethod, _ fullSentenceText: String, _ wordAfterCursor: String) -> Void)?
     public var onSelectSuggestionShortcut: (@Sendable (_ index: Int) -> Bool)?
+    public var onHUDMouseDown: (@Sendable (_ screenPoint: CGPoint) -> Bool)?
+    public var hasActiveSuggestions: (@Sendable () -> Bool)?
+    public var onDoubleTabArmedChanged: (@Sendable (_ isArmed: Bool) -> Void)?
     public var onDismissHUD: (@Sendable () -> Void)?
 
     private var eventTap: CFMachPort?
@@ -36,6 +46,9 @@ public final class EventTapHook: @unchecked Sendable {
     private var lastWordBeforeMouseReset: String = ""
     private var lastMouseResetTime: Date = .distantPast
     private var lastTypingActivityTime: Date = .distantPast
+    private var swallowingHUDMouseClick: Bool = false
+    private var lastTabPressTime: Date = .distantPast
+    private var pendingSingleTabWorkItem: DispatchWorkItem?
     private let lock = NSLock()
     private let logPath = "/tmp/vflow_keylog.log"
 
@@ -88,6 +101,142 @@ public final class EventTapHook: @unchecked Sendable {
         lock.withLock {
             Date().timeIntervalSince(lastTypingActivityTime) < seconds
         }
+    }
+
+    private func canTriggerSuggestionShortcut() -> Bool {
+        if let hasActive = hasActiveSuggestions {
+            return hasActive()
+        }
+        return isWithinTypingActivityWindow(seconds: 8.0)
+    }
+
+    public func cancelPendingDoubleTab(flushSingleTab: Bool = false) {
+        let (pendingItem, wasArmed): (DispatchWorkItem?, Bool) = lock.withLock {
+            let item = pendingSingleTabWorkItem
+            let armed = (item != nil || lastTabPressTime != .distantPast)
+            pendingSingleTabWorkItem = nil
+            lastTabPressTime = .distantPast
+            return (item, armed)
+        }
+        pendingItem?.cancel()
+        if wasArmed {
+            onDoubleTabArmedChanged?(false)
+            if flushSingleTab && pendingItem != nil {
+                postSyntheticKey(KeyCodeMap.kVK_Tab)
+            }
+        }
+    }
+
+    /// Evaluates whether a keyDown event triggers the configured Suggestion Accept Shortcut
+    /// (`Tab+Tab`, `Single Tab`, `Right Arrow →`, `Shift+Return ⇧↩`, or `⌥1/⌥2/⌥3`).
+    /// Returns `true` if the keystroke was consumed.
+    public func handleSuggestionShortcutKeyDown(
+        keycode: CGKeyCode,
+        flags: CGEventFlags,
+        isAutorepeat: Bool = false,
+        replaySingleTabOnTimeout: Bool = true
+    ) -> Bool {
+        // 1. Always support Option + 1 / 2 / 3 (⌥1, ⌥2, ⌥3) in all modes
+        if flags.contains(.maskAlternate) && !flags.contains(.maskCommand) && !flags.contains(.maskControl) {
+            let suggestionIdx: Int? = {
+                switch keycode {
+                case KeyCodeMap.kVK_ANSI_1: return 0
+                case KeyCodeMap.kVK_ANSI_2: return 1
+                case KeyCodeMap.kVK_ANSI_3: return 2
+                default: return nil
+                }
+            }()
+            if let idx = suggestionIdx, onSelectSuggestionShortcut?(idx) == true {
+                cancelPendingDoubleTab(flushSingleTab: false)
+                return true
+            }
+        }
+
+        // If any non-Tab key is pressed while a first Tab is armed, flush/cancel the pending single Tab
+        if keycode != KeyCodeMap.kVK_Tab {
+            cancelPendingDoubleTab(flushSingleTab: replaySingleTabOnTimeout)
+        }
+
+        guard canTriggerSuggestionShortcut() else {
+            return false
+        }
+
+        let mode = suggestionAcceptShortcut
+        let hasNoPrimaryModifiers = !flags.contains(.maskCommand) && !flags.contains(.maskControl) && !flags.contains(.maskAlternate)
+
+        switch mode {
+        case .doubleTab:
+            guard keycode == KeyCodeMap.kVK_Tab && hasNoPrimaryModifiers else { return false }
+            if isAutorepeat {
+                return true
+            }
+            let now = Date()
+            let elapsed = lock.withLock { now.timeIntervalSince(lastTabPressTime) }
+            if elapsed <= 0.50 {
+                // 2nd Tab press within 500ms -> Accept Suggestion #1!
+                cancelPendingDoubleTab(flushSingleTab: false)
+                if onSelectSuggestionShortcut?(0) == true {
+                    logDiagnostic("DOUBLE_TAB_ACCEPTED elapsedMs=\(Int(elapsed * 1000))")
+                    return true
+                }
+                return false
+            } else {
+                // 1st Tab press while HUD has active suggestions -> Arm Double-Tab & hold for 380ms
+                lock.withLock {
+                    pendingSingleTabWorkItem?.cancel()
+                    lastTabPressTime = now
+                }
+                onDoubleTabArmedChanged?(true)
+                if replaySingleTabOnTimeout {
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let self = self else { return }
+                        self.lock.withLock {
+                            self.pendingSingleTabWorkItem = nil
+                            self.lastTabPressTime = .distantPast
+                        }
+                        self.onDoubleTabArmedChanged?(false)
+                        self.engine.reset()
+                        self.clearMouseReset()
+                        self.postSyntheticKey(KeyCodeMap.kVK_Tab)
+                    }
+                    lock.withLock {
+                        pendingSingleTabWorkItem = work
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.38, execute: work)
+                }
+                return true
+            }
+
+        case .singleTab:
+            guard keycode == KeyCodeMap.kVK_Tab && hasNoPrimaryModifiers && !flags.contains(.maskShift) else { return false }
+            return onSelectSuggestionShortcut?(0) == true
+
+        case .rightArrow:
+            guard keycode == 0x7C && hasNoPrimaryModifiers && !flags.contains(.maskShift) else { return false }
+            return onSelectSuggestionShortcut?(0) == true
+
+        case .shiftReturn:
+            guard keycode == KeyCodeMap.kVK_Return && flags.contains(.maskShift) && hasNoPrimaryModifiers else { return false }
+            return onSelectSuggestionShortcut?(0) == true
+
+        case .optionNumbers:
+            return false
+        }
+    }
+
+    /// Emits a single synthetic key press with `syntheticEventMarker` so VFlow's tap passes it straight through.
+    public func postSyntheticKey(_ keycode: CGKeyCode, flags: CGEventFlags = []) {
+        let src = privateEventSource ?? CGEventSource(stateID: .privateState)
+        guard let down = CGEvent(keyboardEventSource: src, virtualKey: keycode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: src, virtualKey: keycode, keyDown: false) else {
+            return
+        }
+        down.flags = flags
+        up.flags = flags
+        down.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+        down.post(tap: .cgSessionEventTap)
+        up.post(tap: .cgSessionEventTap)
     }
 
     /// Finds the start and end boundary indices of the sentence clause around the cursor.
@@ -176,6 +325,7 @@ public final class EventTapHook: @unchecked Sendable {
             (1 << CGEventType.keyDown.rawValue) |
             (1 << CGEventType.keyUp.rawValue) |
             (1 << CGEventType.leftMouseDown.rawValue) |
+            (1 << CGEventType.leftMouseUp.rawValue) |
             (1 << CGEventType.rightMouseDown.rawValue)
 
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -254,8 +404,30 @@ public final class EventTapHook: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        // 3. Reset word buffer on mouse clicks (cursor moved) & refresh HUD for new cursor position
+        // 3. Handle mouse clicks on the floating Caret Pill HUD without stealing focus or resetting the engine
+        if type == .leftMouseUp {
+            let wasSwallowing = lock.withLock {
+                let cur = swallowingHUDMouseClick
+                swallowingHUDMouseClick = false
+                return cur
+            }
+            if wasSwallowing {
+                return nil
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
         if type == .leftMouseDown || type == .rightMouseDown {
+            cancelPendingDoubleTab(flushSingleTab: false)
+            if type == .leftMouseDown {
+                let screenPoint = NSEvent.mouseLocation
+                if onHUDMouseDown?(screenPoint) == true {
+                    lock.withLock { swallowingHUDMouseClick = true }
+                    recordTypingActivity()
+                    logDiagnostic("HUD_MOUSE_CLICK at=(\(Int(screenPoint.x)),\(Int(screenPoint.y)))")
+                    return nil
+                }
+            }
             if !engine.formattedWord.isEmpty {
                 recordMouseReset(word: engine.formattedWord)
             }
@@ -328,20 +500,16 @@ public final class EventTapHook: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        // Quick suggestion selection via Option + 1 / 2 / 3 (⌥1, ⌥2, ⌥3)
-        if flags.contains(.maskAlternate) && !flags.contains(.maskCommand) && !flags.contains(.maskControl) {
-            let suggestionIdx: Int? = {
-                switch keycode {
-                case KeyCodeMap.kVK_ANSI_1: return 0
-                case KeyCodeMap.kVK_ANSI_2: return 1
-                case KeyCodeMap.kVK_ANSI_3: return 2
-                default: return nil
-                }
-            }()
-            if let idx = suggestionIdx, onSelectSuggestionShortcut?(idx) == true {
-                swallowKey(keycode)
-                return nil
-            }
+        // Quick suggestion selection via Option + 1 / 2 / 3 (⌥1, ⌥2, ⌥3) or customizable primary shortcut (Tab+Tab, Tab, →, Shift+Enter)
+        let isAutorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if handleSuggestionShortcutKeyDown(
+            keycode: keycode,
+            flags: flags,
+            isAutorepeat: isAutorepeat,
+            replaySingleTabOnTimeout: true
+        ) {
+            swallowKey(keycode)
+            return nil
         }
 
         guard engine.inputMethod != .off else {
@@ -393,13 +561,8 @@ public final class EventTapHook: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        // Check Tab to accept Suggestion #1 (⇥) when HUD is active within 6s of typing
+        // Check Tab (when no active suggestion consumed it above)
         if keycode == KeyCodeMap.kVK_Tab {
-            if isWithinTypingActivityWindow(seconds: 6.0),
-               onSelectSuggestionShortcut?(0) == true {
-                swallowKey(keycode)
-                return nil
-            }
             engine.reset()
             clearMouseReset()
             setLastPhysicalKey(keycode)

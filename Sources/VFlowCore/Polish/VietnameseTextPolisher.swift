@@ -368,7 +368,23 @@ public struct VietnameseTextPolisher: Sendable {
             ("su\\s+dung", "sử dụng"),
             ("sử\\s+dung", "sử dụng"),
             ("su\\s+dụng", "sử dụng"),
-            ("binh\\s+thuong", "bình thường")
+            ("binh\\s+thuong", "bình thường"),
+            ("không\\s+can\\s+thiet", "không cần thiết"),
+            ("khong\\s+can\\s+thiet", "không cần thiết"),
+            ("can\\s+thiet", "cần thiết"),
+            ("cần\\s+thiet", "cần thiết"),
+            ("can\\s+thiết", "cần thiết"),
+            ("không\\s+can\\b", "không cần"),
+            ("khong\\s+can\\b", "không cần"),
+            ("phải\\s+nhu\\s+the", "phải như thế"),
+            ("phai\\s+nhu\\s+the", "phải như thế"),
+            ("nhu\\s+the\\b", "như thế"),
+            ("như\\s+the\\b", "như thế"),
+            ("nhu\\s+thế\\b", "như thế"),
+            ("phải\\s+nhu\\b", "phải như"),
+            ("phai\\s+nhu\\b", "phải như"),
+            ("the\\s+nao\\b", "thế nào"),
+            ("thế\\s+nao\\b", "thế nào")
         ]
         for (wrong, right) in phraseRepairs {
             joined = joined.replacingOccurrences(of: "(?i)\\b" + wrong + "\\b", with: right, options: .regularExpression)

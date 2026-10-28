@@ -104,6 +104,14 @@ public final class VFlowControlCenterStore: ObservableObject {
         }
     }
 
+    @Published public var suggestionAcceptShortcut: SuggestionAcceptShortcut {
+        didSet {
+            UserDefaults.standard.set(suggestionAcceptShortcut.rawValue, forKey: Keys.suggestionAcceptShortcut)
+            EventTapHook.shared.suggestionAcceptShortcut = suggestionAcceptShortcut
+            CaretHUDModel.shared.acceptShortcut = suggestionAcceptShortcut
+        }
+    }
+
     @Published public var currentTone: PolishTone {
         didSet {
             UserDefaults.standard.set(currentTone.rawValue, forKey: Keys.currentTone)
@@ -201,6 +209,7 @@ public final class VFlowControlCenterStore: ObservableObject {
         static let inputMethod = "vflow.settings.inputMethod.v2"
         static let tonePlacement = "vflow.settings.tonePlacement.v2"
         static let autoEnglishRestore = "vflow.settings.autoEnglishRestore.v2"
+        static let suggestionAcceptShortcut = "vflow.settings.suggestionAcceptShortcut.v1"
         static let currentTone = "vflow.settings.currentTone.v2"
         static let isNeuralPolishEnabled = "vflow.settings.isNeuralPolishEnabled.v2"
         static let systemPromptPreset = "vflow.settings.systemPromptPreset.v1"
@@ -216,6 +225,7 @@ public final class VFlowControlCenterStore: ObservableObject {
         let savedMethod = defaults.string(forKey: Keys.inputMethod).flatMap(InputMethod.init(rawValue:)) ?? .telex
         let savedPlacement = defaults.string(forKey: Keys.tonePlacement).flatMap(TonePlacement.init(rawValue:)) ?? .modern
         let savedAutoEN = defaults.object(forKey: Keys.autoEnglishRestore) as? Bool ?? true
+        let savedAcceptShortcut = defaults.string(forKey: Keys.suggestionAcceptShortcut).flatMap(SuggestionAcceptShortcut.init(rawValue:)) ?? .doubleTab
         let savedTone = defaults.string(forKey: Keys.currentTone).flatMap(PolishTone.init(rawValue:)) ?? .natural
         let savedNeuralPolish = defaults.object(forKey: Keys.isNeuralPolishEnabled) as? Bool ?? true
         let savedPreset = defaults.string(forKey: Keys.systemPromptPreset).flatMap(SystemPromptPreset.init(rawValue:)) ?? .standard
@@ -228,6 +238,7 @@ public final class VFlowControlCenterStore: ObservableObject {
         self.tonePlacement = savedPlacement
         self.autoEnglishRestore = savedAutoEN
         self.expandMacrosOnSpace = CustomMacroRegistry.shared.expandMacrosOnSpace
+        self.suggestionAcceptShortcut = savedAcceptShortcut
         self.currentTone = savedTone
         self.isNeuralPolishEnabled = savedNeuralPolish
         self.systemPromptPreset = savedPreset
@@ -244,7 +255,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         }
         EventTapHook.shared.engine.tonePlacement = savedPlacement
         EventTapHook.shared.engine.autoEnglishRestore = savedAutoEN
+        EventTapHook.shared.suggestionAcceptShortcut = savedAcceptShortcut
         CaretHUDModel.shared.inputMethod = savedMethod
+        CaretHUDModel.shared.acceptShortcut = savedAcceptShortcut
         CaretHUDModel.shared.currentTone = savedTone
         OnDeviceAIEngine.isNeuralPolishEnabled = savedNeuralPolish
         OnDeviceAIEngine.activeSystemPromptPreset = savedPreset

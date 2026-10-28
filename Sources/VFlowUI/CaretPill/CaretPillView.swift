@@ -12,10 +12,16 @@ public struct CaretPillView: View {
     public var suggestions: [SuggestionItem]
     public var inputMethod: InputMethod
     public var severity: SuggestionSeverity
+    public var acceptShortcut: SuggestionAcceptShortcut
+    public var isDoubleTabArmed: Bool
     public var onUndo: () -> Void
     public var onCycleTone: () -> Void
     public var onSelectSuggestion: (SuggestionItem) -> Void
     public var onToggleInputMethod: () -> Void
+    public var onUpdateChipFrame: ((Int, CGRect) -> Void)?
+    public var onUpdateModeButtonFrame: ((CGRect) -> Void)?
+    public var onUpdateUndoButtonFrame: ((CGRect) -> Void)?
+    public var onUpdateToneButtonFrame: ((CGRect) -> Void)?
 
     public init(
         state: Binding<CaretPillState>,
@@ -26,10 +32,16 @@ public struct CaretPillView: View {
         suggestions: [SuggestionItem] = [],
         inputMethod: InputMethod = .telex,
         severity: SuggestionSeverity = .normal,
+        acceptShortcut: SuggestionAcceptShortcut = .doubleTab,
+        isDoubleTabArmed: Bool = false,
         onUndo: @escaping () -> Void = {},
         onCycleTone: @escaping () -> Void = {},
         onSelectSuggestion: @escaping (SuggestionItem) -> Void = { _ in },
-        onToggleInputMethod: @escaping () -> Void = {}
+        onToggleInputMethod: @escaping () -> Void = {},
+        onUpdateChipFrame: ((Int, CGRect) -> Void)? = nil,
+        onUpdateModeButtonFrame: ((CGRect) -> Void)? = nil,
+        onUpdateUndoButtonFrame: ((CGRect) -> Void)? = nil,
+        onUpdateToneButtonFrame: ((CGRect) -> Void)? = nil
     ) {
         self._state = state
         self._text = text
@@ -39,10 +51,16 @@ public struct CaretPillView: View {
         self.suggestions = suggestions
         self.inputMethod = inputMethod
         self.severity = severity
+        self.acceptShortcut = acceptShortcut
+        self.isDoubleTabArmed = isDoubleTabArmed
         self.onUndo = onUndo
         self.onCycleTone = onCycleTone
         self.onSelectSuggestion = onSelectSuggestion
         self.onToggleInputMethod = onToggleInputMethod
+        self.onUpdateChipFrame = onUpdateChipFrame
+        self.onUpdateModeButtonFrame = onUpdateModeButtonFrame
+        self.onUpdateUndoButtonFrame = onUpdateUndoButtonFrame
+        self.onUpdateToneButtonFrame = onUpdateToneButtonFrame
     }
 
     private var effectiveSeverity: SuggestionSeverity {
@@ -98,14 +116,23 @@ public struct CaretPillView: View {
                                 lineWidth: 0.5
                             )
                     )
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .background(
+                GeometryReader { geo in
+                    let frame = geo.frame(in: .named("CaretPillRoot"))
+                    Color.clear
+                        .onAppear { onUpdateModeButtonFrame?(frame) }
+                        .onChange(of: frame) { _, newFrame in onUpdateModeButtonFrame?(newFrame) }
+                }
+            )
             .help("Chuyển nhanh VI ⇄ EN (⌥Z)")
 
             // Block 2: Center Interactive Suggestions or Live Text Area
             if !visibleSuggestions.isEmpty {
                 HStack(spacing: 6) {
-                    ForEach(Array(visibleSuggestions.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(visibleSuggestions.enumerated()), id: \.offset) { index, item in
                         suggestionChip(item: item, index: index)
                     }
                 }
@@ -154,6 +181,7 @@ public struct CaretPillView: View {
         )
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .coordinateSpace(name: "CaretPillRoot")
     }
 
     private var visibleSuggestions: [SuggestionItem] {
@@ -185,9 +213,15 @@ public struct CaretPillView: View {
         Button(action: { onSelectSuggestion(item) }) {
             HStack(spacing: 4) {
                 if index == 0 {
-                    Text("⇥")
+                    Text(acceptShortcut.shortBadge)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(chipColor)
+                        .foregroundColor(isDoubleTabArmed ? Color.white : chipColor)
+                        .padding(.horizontal, isDoubleTabArmed ? 4 : 1)
+                        .padding(.vertical, isDoubleTabArmed ? 1 : 0)
+                        .background(
+                            isDoubleTabArmed ? chipColor.opacity(0.85) : Color.clear
+                        )
+                        .clipShape(Capsule())
                 } else {
                     Text("⌥\(index + 1)")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -222,12 +256,23 @@ public struct CaretPillView: View {
                         isHighlight
                             ? chipColor.opacity(chipSeverity == .high ? 0.65 : 0.45)
                             : Color.white.opacity(0.12),
-                        lineWidth: chipSeverity == .high && index == 0 ? 1.0 : 0.5
+                        lineWidth: (chipSeverity == .high || isDoubleTabArmed) && index == 0 ? 1.2 : 0.5
                     )
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("Nhấn chuột hoặc ⌥\(index + 1) để chèn '\(item.text)'")
+        .background(
+            GeometryReader { geo in
+                let frame = geo.frame(in: .named("CaretPillRoot"))
+                Color.clear
+                    .onAppear { onUpdateChipFrame?(index, frame) }
+                    .onChange(of: frame) { _, newFrame in onUpdateChipFrame?(index, newFrame) }
+            }
+        )
+        .help(index == 0
+              ? "Click chuột, \(acceptShortcut.shortBadge) hoặc ⌥1 để chèn '\(item.text)'"
+              : "Click chuột hoặc ⌥\(index + 1) để chèn '\(item.text)'")
     }
 
     private var displayContent: String {
@@ -251,7 +296,9 @@ public struct CaretPillView: View {
             PillActionControls(
                 currentTone: currentTone,
                 onUndo: onUndo,
-                onCycleTone: onCycleTone
+                onCycleTone: onCycleTone,
+                onUpdateUndoFrame: onUpdateUndoButtonFrame,
+                onUpdateToneFrame: onUpdateToneButtonFrame
             )
         case .working:
             Text("AI Polish")
@@ -265,7 +312,9 @@ public struct CaretPillView: View {
                 PillActionControls(
                     currentTone: currentTone,
                     onUndo: onUndo,
-                    onCycleTone: onCycleTone
+                    onCycleTone: onCycleTone,
+                    onUpdateUndoFrame: onUpdateUndoButtonFrame,
+                    onUpdateToneFrame: onUpdateToneButtonFrame
                 )
             }
         }

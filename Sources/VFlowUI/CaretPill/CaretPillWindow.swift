@@ -3,6 +3,17 @@ import AppKit
 import SwiftUI
 import VFlowCore
 
+/// Non-activating NSHostingView that accepts first-mouse events without requiring window activation or dragging.
+public final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override public func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+
+    override public var mouseDownCanMoveWindow: Bool {
+        return false
+    }
+}
+
 /// Non-activating floating NSPanel for displaying the Caret Pill HUD without stealing focus.
 public final class CaretPillWindow: NSPanel, @unchecked Sendable {
     public static let shared = CaretPillWindow()
@@ -22,7 +33,7 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
         self.backgroundColor = .clear
         self.hasShadow = false
         self.ignoresMouseEvents = false
-        self.isMovableByWindowBackground = true
+        self.isMovableByWindowBackground = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
     }
 
@@ -32,6 +43,20 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
 
     override public var canBecomeMain: Bool {
         false
+    }
+
+    /// Handles a global mouse-down at the specified screen coordinate (AppKit bottom-left screen space).
+    /// Returns `true` if the click landed inside the visible Caret Pill HUD so `EventTapHook` can swallow it without stealing focus from the active text input.
+    @MainActor
+    public func handleMouseDown(atScreenPoint screenPoint: CGPoint) -> Bool {
+        guard self.isVisible else { return false }
+        let winFrame = self.frame
+        guard winFrame.insetBy(dx: -4, dy: -4).contains(screenPoint) else { return false }
+
+        let localX = screenPoint.x - winFrame.minX
+        let localY = winFrame.maxY - screenPoint.y
+        let localPoint = CGPoint(x: localX, y: localY)
+        return CaretHUDModel.shared.dispatchHitTest(at: localPoint, windowSize: winFrame.size)
     }
 
     /// Positions and presents the Caret Pill HUD at the specified frame without activating the application,
@@ -94,6 +119,13 @@ public final class CaretHUDModel: ObservableObject {
     @Published public var currentTone: PolishTone = .natural
     @Published public var inputMethod: InputMethod = .telex
     @Published public var severity: SuggestionSeverity = .normal
+    @Published public var acceptShortcut: SuggestionAcceptShortcut = .doubleTab
+    @Published public var isDoubleTabArmed: Bool = false
+
+    public var chipFrames: [Int: CGRect] = [:]
+    public var modeButtonFrame: CGRect = .zero
+    public var undoButtonFrame: CGRect = .zero
+    public var toneButtonFrame: CGRect = .zero
 
     public var onSelectSuggestion: ((SuggestionItem) -> Void)?
     public var onToggleInputMethod: (() -> Void)?
@@ -107,9 +139,18 @@ public final class CaretHUDModel: ObservableObject {
 
     public init() {}
 
-    /// Ensures CaretPillWindow has its NSHostingView bound to CaretHUDModel.shared.
+    public var visibleSuggestions: [SuggestionItem] {
+        guard !suggestions.isEmpty else { return [] }
+        let hasLongPolish = suggestions.prefix(2).contains { $0.kind == .aiPolish && $0.text.count > 12 }
+        if hasLongPolish {
+            return Array(suggestions.prefix(2))
+        }
+        return Array(suggestions.prefix(3))
+    }
+
+    /// Ensures CaretPillWindow has its FirstMouseHostingView bound to CaretHUDModel.shared.
     public func ensureHosted() {
-        if !isHosted || !(CaretPillWindow.shared.contentView is NSHostingView<CaretHUDContainerView>) {
+        if !isHosted || !(CaretPillWindow.shared.contentView is FirstMouseHostingView<CaretHUDContainerView>) {
             restoreHosting()
         }
     }
@@ -118,9 +159,95 @@ public final class CaretHUDModel: ObservableObject {
     public func restoreHosting() {
         isHosted = true
         let root = CaretHUDContainerView(model: self)
-        let hostingView = NSHostingView(rootView: root)
+        let hostingView = FirstMouseHostingView(rootView: root)
         hostingView.frame = NSRect(x: 0, y: 0, width: 460, height: 52)
         CaretPillWindow.shared.contentView = hostingView
+    }
+
+    /// Hit-tests a click inside the Caret Pill HUD in local top-left coordinates and invokes the matching action without stealing focus.
+    public func dispatchHitTest(at localPoint: CGPoint, windowSize: CGSize) -> Bool {
+        let visible = visibleSuggestions
+
+        // 1. Check recorded suggestion chip frames
+        for idx in 0..<visible.count {
+            if let rect = chipFrames[idx],
+               rect.width > 0,
+               localPoint.x >= rect.minX - 5 && localPoint.x <= rect.maxX + 5 {
+                let chosen = visible[idx]
+                DispatchQueue.main.async { [weak self] in
+                    self?.onSelectSuggestion?(chosen)
+                }
+                return true
+            }
+        }
+
+        // 2. Check recorded VI/EN Mode Toggle button frame
+        if modeButtonFrame.width > 0,
+           localPoint.x >= modeButtonFrame.minX - 5 && localPoint.x <= modeButtonFrame.maxX + 5 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onToggleInputMethod?()
+            }
+            return true
+        }
+
+        // 3. Check recorded Undo & Cycle Tone button frames
+        if undoButtonFrame.width > 0,
+           localPoint.x >= undoButtonFrame.minX - 4 && localPoint.x <= undoButtonFrame.maxX + 4 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onUndo?()
+            }
+            return true
+        }
+        if toneButtonFrame.width > 0,
+           localPoint.x >= toneButtonFrame.minX - 4 && localPoint.x <= toneButtonFrame.maxX + 4 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onCycleTone?()
+            }
+            return true
+        }
+
+        // 4. Proportional horizontal fallback if GeometryReader frames have not yet populated
+        if localPoint.x >= 60 && localPoint.x <= 108 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onToggleInputMethod?()
+            }
+            return true
+        }
+        let chipRegionStart: CGFloat = 109
+        let chipRegionEnd: CGFloat = max(chipRegionStart + 40, windowSize.width - 115)
+        if !visible.isEmpty && localPoint.x > chipRegionStart && localPoint.x < chipRegionEnd {
+            let weights = visible.map { CGFloat(max(6, $0.text.count + 5)) }
+            let totalWeight = max(1, weights.reduce(0, +))
+            let ratio = max(0, min(0.999, (localPoint.x - chipRegionStart) / (chipRegionEnd - chipRegionStart)))
+            var accum: CGFloat = 0
+            var matchedIndex = visible.count - 1
+            for (idx, w) in weights.enumerated() {
+                accum += w / totalWeight
+                if ratio <= accum {
+                    matchedIndex = idx
+                    break
+                }
+            }
+            let chosen = visible[matchedIndex]
+            DispatchQueue.main.async { [weak self] in
+                self?.onSelectSuggestion?(chosen)
+            }
+            return true
+        }
+        if localPoint.x >= windowSize.width - 115 && localPoint.x < windowSize.width - 72 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onUndo?()
+            }
+            return true
+        }
+        if localPoint.x >= windowSize.width - 72 {
+            DispatchQueue.main.async { [weak self] in
+                self?.onCycleTone?()
+            }
+            return true
+        }
+
+        return true
     }
 
     /// Triggers a visual wave pulse and refreshes suggestions when a keystroke occurs.
@@ -346,10 +473,16 @@ public struct CaretHUDContainerView: View {
             suggestions: model.suggestions,
             inputMethod: model.inputMethod,
             severity: model.severity,
+            acceptShortcut: model.acceptShortcut,
+            isDoubleTabArmed: model.isDoubleTabArmed,
             onUndo: { model.onUndo?() },
             onCycleTone: { model.onCycleTone?() },
             onSelectSuggestion: { item in model.onSelectSuggestion?(item) },
-            onToggleInputMethod: { model.onToggleInputMethod?() }
+            onToggleInputMethod: { model.onToggleInputMethod?() },
+            onUpdateChipFrame: { idx, rect in model.chipFrames[idx] = rect },
+            onUpdateModeButtonFrame: { rect in model.modeButtonFrame = rect },
+            onUpdateUndoButtonFrame: { rect in model.undoButtonFrame = rect },
+            onUpdateToneButtonFrame: { rect in model.toneButtonFrame = rect }
         )
     }
 }
