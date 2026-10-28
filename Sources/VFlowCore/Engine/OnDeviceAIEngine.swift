@@ -7,13 +7,13 @@ import FoundationModels
 @available(macOS 26.0, *)
 @Generable
 public struct OnDeviceAISuggestions: Sendable {
-    @Guide(description: "The corrected Vietnamese sentence with missing diacritics restored, keyboard typos fixed according to sentence meaning and System Prompt instructions (e.g. 'to đang' -> 'Tôi đang', 'không cau' -> 'không dấu', 'thaat sư' -> 'thật sự'), and at most one missing bridge word inserted. Preserve word order and English technical terms (text, suggest, value, model, AI, app, code, bug, user, UI).")
+    @Guide(description: "The corrected Vietnamese or English sentence with missing diacritics restored, grammar and subject-verb/tense agreement fixed (e.g. 'he go to school yesterday' -> 'He went to school yesterday', 'a apple' -> 'an apple', 'suy ngĩ về nghành công ngệ' -> 'suy nghĩ về ngành công nghệ', 'to đang' -> 'Tôi đang', 'không cau' -> 'không dấu'), and System Prompt instructions applied. Always return the complete sentence.")
     public var polishedSentence: String
 
     @Guide(description: "1 or 2 natural next words that follow the end of the sentence")
     public var nextWord: String
 
-    @Guide(description: "Urgency/severity of correction needed: 0 = input is already clean and compliant, 1 = minor 1-word accent or tone tweak, 2 = heavy spelling errors, missing diacritics across multiple words, or violates System Prompt rules")
+    @Guide(description: "Urgency/severity of correction needed: 0 = input is already grammatically and orthographically clean, 1 = minor 1-word accent or grammar tweak, 2 = heavy spelling/grammar errors across multiple words or violates System Prompt rules")
     public var severityLevel: Int
 }
 #endif
@@ -161,11 +161,11 @@ public actor OnDeviceAIEngine {
     private var lastInferenceLatencyMs: Double = 0.0
 
     private static let baseSystemGuardrails = """
-    You are an expert Vietnamese and English keyboard input & typo corrector.
-    1. Restore missing Vietnamese tone marks and diacritics on unsigned words across the ENTIRE sentence from start to finish (e.g. "toi dang thu go tieng viet khong dau" -> "Tôi đang thử gõ tiếng Việt không dấu").
-    2. Fix character-level Vietnamese typing, shifted-space typos, and spelling errors according to sentence meaning and context (e.g. "đan gkhoong" -> "đang không", "to đang thu go tieng viet không cau" -> "Tôi đang thử gõ tiếng Việt không dấu", "tính ra nó đan gkhoong bị loi nua y ma no chang ra sao" -> "Tính ra nó đang không bị lỗi nữa ý mà nó chẳng ra sao").
+    You are an expert Bilingual (Vietnamese and English) grammar, spelling, and keyboard input corrector.
+    1. For Vietnamese: Restore missing tone marks/diacritics on unsigned words across the ENTIRE sentence, fix shifted-space typos ("đan gkhoong" -> "đang không"), and fix Vietnamese grammar & orthographic rules (ng/ngh, g/gh, c/k, d/gi, s/x, hỏi/ngã, e.g. "suy ngĩ về nghành công ngệ" -> "suy nghĩ về ngành công nghệ", "giành thời gian" -> "dành thời gian", "sử lý" -> "xử lý").
+    2. For English: Fix English grammar, subject-verb agreement, verb tense agreement with time markers, articles (a/an/the), prepositions, and contractions (e.g. "he go to school yesterday" -> "He went to school yesterday", "she dont know a answer" -> "She doesn't know an answer").
     3. Always return the FULL corrected sentence in `polishedSentence` without truncating or dropping clauses.
-    4. Never expand "go" into "Google" (in Vietnamese "go" is "gõ"). Preserve word order and keep English technical terms (text, suggest, value, model, AI, app, code, bug, user, UI) in English.
+    4. Never expand "go" into "Google" (in Vietnamese "go" is "gõ"). Preserve English technical terms (text, suggest, value, model, AI, app, code, bug, user, UI).
     """
 
     /// Builds the combined system instructions incorporating the user's active System Prompt.
@@ -555,8 +555,60 @@ public actor OnDeviceAIEngine {
         cache.removeAll(keepingCapacity: true)
     }
 
+    /// Grammatical lemma families for English verb/article/pronoun conjugations and Vietnamese orthographic pairs.
+    private nonisolated static let grammaticalLemmaFamilies: [Set<String>] = [
+        ["be", "am", "is", "are", "was", "were", "been", "being", "im", "isn't", "isnt", "aren't", "arent", "wasn't", "wasnt", "weren't", "werent"],
+        ["go", "goes", "went", "gone", "going"],
+        ["do", "does", "did", "done", "doing", "dont", "don't", "doesnt", "doesn't", "didnt", "didn't"],
+        ["have", "has", "had", "having", "havent", "haven't", "hasnt", "hasn't", "hadnt", "hadn't", "of"],
+        ["a", "an", "the"],
+        ["this", "that", "these", "those"],
+        ["see", "sees", "saw", "seen", "seeing"],
+        ["write", "writes", "wrote", "written", "writing"],
+        ["take", "takes", "took", "taken", "taking"],
+        ["make", "makes", "made", "making"],
+        ["get", "gets", "got", "gotten", "getting"],
+        ["say", "says", "said", "saying"],
+        ["think", "thinks", "thought", "thinking"],
+        ["know", "knows", "knew", "known", "knowing"],
+        ["come", "comes", "came", "coming"],
+        ["give", "gives", "gave", "given", "giving"],
+        ["find", "finds", "found", "finding"],
+        ["tell", "tells", "told", "telling"],
+        ["buy", "buys", "bought", "buying"],
+        ["run", "runs", "ran", "running"],
+        ["eat", "eats", "ate", "eaten", "eating"],
+        ["speak", "speaks", "spoke", "spoken", "speaking"],
+        ["break", "breaks", "broke", "broken", "breaking"],
+        ["send", "sends", "sent", "sending"],
+        ["good", "better", "best"],
+        ["bad", "worse", "worst"],
+        ["many", "much", "more", "most"],
+        ["danh", "gianh"],
+        ["su", "xu"],
+        ["nganh", "nghanh"],
+        ["nghi", "ngi"],
+        ["nghe", "nge"],
+        ["ghep", "gep"],
+        ["ghe", "ge"],
+        ["xuat", "suat"],
+        ["xung", "sung"],
+        ["da", "gia"],
+        ["nhap", "nhat"]
+    ]
+
+    public nonisolated static func areGrammaticallyEquivalentTokens(_ aRoot: String, _ bRoot: String) -> Bool {
+        if aRoot == bRoot { return true }
+        for family in grammaticalLemmaFamilies {
+            if family.contains(aRoot) && family.contains(bRoot) {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Verifies that the Neural Engine candidate preserves all existing words from `base`
-    /// (allowing unsigned -> signed Vietnamese diacritic restoration and at most 1 inserted bridge word).
+    /// (allowing unsigned -> signed Vietnamese diacritic restoration, English/Vietnamese grammatical inflection repairs, and at most 1 inserted bridge word).
     public nonisolated static func isValidRefinement(base: String, candidate: String) -> Bool {
         let baseTokens = base
             .components(separatedBy: .whitespaces)
@@ -585,34 +637,43 @@ public actor OnDeviceAIEngine {
         let candStripped = candTokens.map { SuggestionEngine.stripDiacritics($0) }
         var closeMatches = 0
 
-        // Every token in effectiveBaseTokens must have its ASCII root or a character-level typo correction (edit distance <= 2) present in candidate
+        // Every token in effectiveBaseTokens must have its ASCII root, grammatical lemma inflection, or character-level typo correction (edit distance <= 2) present in candidate
         for bTok in effectiveBaseTokens {
             let bRoot = SuggestionEngine.stripDiacritics(bTok)
             let hasExactOrTypoMatch = candStripped.contains { cRoot in
-                cRoot == bRoot || SuggestionEngine.asciiEditDistance(bRoot, cRoot) <= 2
+                cRoot == bRoot ||
+                areGrammaticallyEquivalentTokens(bRoot, cRoot) ||
+                SuggestionEngine.asciiEditDistance(bRoot, cRoot) <= 2
             }
             guard hasExactOrTypoMatch else {
                 return false
             }
-            if candStripped.contains(where: { $0 == bRoot || SuggestionEngine.asciiEditDistance(bRoot, $0) <= 1 }) {
+            if candStripped.contains(where: {
+                $0 == bRoot ||
+                areGrammaticallyEquivalentTokens(bRoot, $0) ||
+                SuggestionEngine.asciiEditDistance(bRoot, $0) <= 1
+            }) {
                 closeMatches += 1
             }
         }
 
-        // At least 65% of effective base tokens must be exact root matches or 1-character typo fixes
+        // At least 65% of effective base tokens must be exact root matches, grammatical inflections, or 1-character typo fixes
         guard Double(closeMatches) / Double(effectiveBaseTokens.count) >= 0.65 else {
             return false
         }
 
         // Any already-accented Vietnamese word in base must retain its exact token, exact stripped root,
+        // valid Vietnamese orthographic grammar pair (e.g. "nghành" -> "ngành", "giành" -> "dành", "sử" -> "xử"),
         // or a same-initial-letter 1-character prefix/suffix repair (e.g. "đan" -> "đang", "tô" -> "tôi")
-        // while strictly blocking initial-consonant substitutions (like "câu" -> "dấu").
+        // while strictly blocking unrelated initial-consonant substitutions (like "câu" -> "dấu").
         for bTok in effectiveBaseTokens {
             let hasDiacritics = bTok.unicodeScalars.contains { $0.value > 127 }
             if hasDiacritics {
                 let bRoot = SuggestionEngine.stripDiacritics(bTok)
                 let preserved = candTokens.contains(bTok) || candStripped.contains { cRoot in
-                    if cRoot == bRoot { return true }
+                    if cRoot == bRoot || areGrammaticallyEquivalentTokens(bRoot, cRoot) {
+                        return true
+                    }
                     guard let bFirst = bRoot.first, let cFirst = cRoot.first, bFirst == cFirst else {
                         return false
                     }

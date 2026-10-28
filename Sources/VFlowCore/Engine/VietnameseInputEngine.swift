@@ -130,7 +130,9 @@ public final class VietnameseInputEngine: @unchecked Sendable {
 
     private func handlePassThrough(_ char: Character) -> EngineResult {
         if isWordBoundary(char) {
+            let completed = currentFormattedWord
             reset()
+            return EngineResult(consumed: false, currentWord: completed)
         } else {
             rawBuffer.append(char)
             currentFormattedWord.append(char)

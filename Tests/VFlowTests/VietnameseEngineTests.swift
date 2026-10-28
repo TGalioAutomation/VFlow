@@ -789,4 +789,64 @@ final class VietnameseEngineTests: XCTestCase {
         buf.popLastWord()
         XCTAssertEqual(buf.currentSentence(), "chẳng ra")
     }
+
+    func testBilingualEnglishAndVietnameseGrammarChecking() {
+        // 1. English Grammar: Past-time tense agreement + 3rd-person negative + article a/an
+        let enRaw1 = "he go to school yesterday and he dont know a answer"
+        let enPolished1 = VietnameseTextPolisher.polish(enRaw1)
+        XCTAssertEqual(enPolished1, "He went to school yesterday and he doesn't know an answer")
+
+        let enSug1 = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: enRaw1.components(separatedBy: " "),
+            fullSentenceText: enRaw1,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(enSug1.first?.kind, .aiPolish)
+        XCTAssertEqual(enSug1.first?.severity, .high)
+        XCTAssertEqual(enSug1.first?.text, "He went to school yesterday and he doesn't know an answer")
+
+        // 2. English Grammar: Auxiliary/Perfect verb forms + double comparative + uncountable noun
+        let enRaw2 = "i did not went there because i have saw more better informations"
+        let enPolished2 = VietnameseTextPolisher.polish(enRaw2)
+        XCTAssertEqual(enPolished2, "I did not go there because I have seen better information")
+
+        // 3. OnDeviceAIEngine.isValidRefinement accepts English irregular verb conjugations
+        XCTAssertTrue(
+            OnDeviceAIEngine.isValidRefinement(
+                base: "he go to school yesterday",
+                candidate: "He went to school yesterday"
+            )
+        )
+
+        // 4. Vietnamese Grammar & Orthography: duplicate function words, ng/ngh, g/gh, dành/giành, xử/sử, hỏi/ngã
+        let vnRaw = "tôi đang đang suy ngĩ về nghành công ngệ và muốn dành giải thưởng cũng như sử lý các lỗi ngử pháp"
+        let vnPolished = VietnameseTextPolisher.polish(vnRaw)
+        XCTAssertEqual(
+            vnPolished.lowercased(),
+            "tôi đang suy nghĩ về ngành công nghệ và muốn giành giải thưởng cũng như xử lý các lỗi ngữ pháp"
+        )
+
+        let vnSug = SuggestionEngine.suggest(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: vnRaw.components(separatedBy: " "),
+            fullSentenceText: vnRaw,
+            promoteAIPolishOnHighSeverity: true
+        )
+        XCTAssertEqual(vnSug.first?.kind, .aiPolish)
+        XCTAssertEqual(vnSug.first?.severity, .high)
+        XCTAssertEqual(
+            vnSug.first?.text.lowercased(),
+            "tôi đang suy nghĩ về ngành công nghệ và muốn giành giải thưởng cũng như xử lý các lỗi ngữ pháp"
+        )
+
+        XCTAssertTrue(
+            OnDeviceAIEngine.isValidRefinement(
+                base: vnRaw,
+                candidate: vnPolished
+            )
+        )
+    }
 }

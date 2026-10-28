@@ -512,11 +512,6 @@ public final class EventTapHook: @unchecked Sendable {
             return nil
         }
 
-        guard engine.inputMethod != .off else {
-            setLastPhysicalKey(keycode)
-            return Unmanaged.passUnretained(event)
-        }
-
         // Pass through if Command, Control, or Option is held
         if flags.contains(.maskCommand) || flags.contains(.maskControl) || flags.contains(.maskAlternate) {
             if flags.contains(.maskCommand) {
