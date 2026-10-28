@@ -87,6 +87,166 @@ public final class AccessibilityBridge: @unchecked Sendable {
         )
     }
 
+    /// Pure deterministic evaluator for whether an Accessibility element's metadata represents an editable text input.
+    /// Rejects non-editable browser/document containers (`AXWebArea`, `AXLink`, `AXButton`, `AXWindow`, etc.)
+    /// unless `contenteditable` (`AXEditable == true`) is explicitly active.
+    public static func isEditableElementMetadata(
+        role: String?,
+        subrole: String? = nil,
+        isEditableAttr: Bool? = nil,
+        isValueSettable: Bool = false,
+        isSelectedTextSettable: Bool = false,
+        ancestorIsEditable: Bool = false
+    ) -> Bool {
+        guard let rawRole = role, !rawRole.isEmpty else {
+            return false
+        }
+
+        // 1. Standard native & web text input roles (<input>, <textarea>, Omnibox, NSTextField, NSTextView)
+        let standardTextRoles: Set<String> = [
+            "AXTextField",
+            "AXTextArea",
+            "AXComboBox",
+            "AXSearchField"
+        ]
+        if standardTextRoles.contains(rawRole) {
+            if isEditableAttr == false && !isValueSettable && !isSelectedTextSettable {
+                return false
+            }
+            return true
+        }
+
+        if let sr = subrole, (sr == "AXSearchField" || sr == "AXTextField") {
+            return true
+        }
+
+        // 2. Explicit contenteditable / rich-editor flag on self or ancestor (Notion, Gmail, Slack, Antigravity, Google Docs)
+        if isEditableAttr == true || ancestorIsEditable {
+            return true
+        }
+
+        // 3. Browser webpage root (AXWebArea) and non-text UI controls are NEVER editable unless AXEditable == true above
+        let nonEditableRoles: Set<String> = [
+            "AXWebArea",
+            "AXWindow",
+            "AXApplication",
+            "AXScrollArea",
+            "AXLink",
+            "AXButton",
+            "AXRadioButton",
+            "AXCheckBox",
+            "AXPopUpButton",
+            "AXMenuButton",
+            "AXTabGroup",
+            "AXToolbar",
+            "AXMenu",
+            "AXMenuBar",
+            "AXMenuItem",
+            "AXImage",
+            "AXHeading",
+            "AXList",
+            "AXTable",
+            "AXOutline",
+            "AXSlider",
+            "AXScrollBar",
+            "AXSplitter",
+            "AXColorWell"
+        ]
+        if nonEditableRoles.contains(rawRole) {
+            return false
+        }
+
+        // 4. Generic containers or text nodes (AXGroup, AXStaticText) are only editable if their value or selected text is settable
+        if isValueSettable || isSelectedTextSettable {
+            return true
+        }
+
+        return false
+    }
+
+    /// Returns true if and only if the currently focused UI element is an editable text input box
+    /// (native text field, browser `<input>`/`<textarea>`, or `contenteditable` editor).
+    public func isFocusedElementEditableTextInput() -> Bool {
+        guard let element = focusedUIElement() else {
+            return false
+        }
+
+        func readStringAttr(_ el: AXUIElement, _ attr: String) -> String? {
+            var ref: CFTypeRef?
+            if AXUIElementCopyAttributeValue(el, attr as CFString, &ref) == .success,
+               let str = ref as? String {
+                return str
+            }
+            return nil
+        }
+
+        func readBoolAttr(_ el: AXUIElement, _ attr: String) -> Bool? {
+            var ref: CFTypeRef?
+            if AXUIElementCopyAttributeValue(el, attr as CFString, &ref) == .success,
+               let val = ref {
+                if CFGetTypeID(val) == CFBooleanGetTypeID() {
+                    return CFBooleanGetValue((val as! CFBoolean))
+                }
+                if let num = val as? NSNumber {
+                    return num.boolValue
+                }
+            }
+            return nil
+        }
+
+        func isAttrSettable(_ el: AXUIElement, _ attr: String) -> Bool {
+            var settable = DarwinBoolean(false)
+            if AXUIElementIsAttributeSettable(el, attr as CFString, &settable) == .success {
+                return settable.boolValue
+            }
+            return false
+        }
+
+        let role = readStringAttr(element, kAXRoleAttribute)
+        let subrole = readStringAttr(element, kAXSubroleAttribute)
+        let isEditableAttr = readBoolAttr(element, "AXEditable") ?? readBoolAttr(element, "AX Is Editable")
+        let isValueSettable = isAttrSettable(element, kAXValueAttribute)
+        let isSelectedTextSettable = isAttrSettable(element, kAXSelectedTextAttribute)
+
+        // Walk up to 5 ancestors to detect rich contenteditable containers when cursor is inside a child paragraph/span
+        var ancestorIsEditable = false
+        var currentParent: AXUIElement = element
+        for _ in 0..<5 {
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parentVal = parentRef,
+                  CFGetTypeID(parentVal) == AXUIElementGetTypeID() else {
+                break
+            }
+            let parentEl = parentVal as! AXUIElement
+            let parentRole = readStringAttr(parentEl, kAXRoleAttribute) ?? ""
+            if parentRole == "AXWindow" || parentRole == "AXApplication" || parentRole == "AXScrollArea" {
+                break
+            }
+            if parentRole == "AXTextField" || parentRole == "AXTextArea" || parentRole == "AXComboBox" || parentRole == "AXSearchField" {
+                ancestorIsEditable = true
+                break
+            }
+            if readBoolAttr(parentEl, "AXEditable") == true {
+                ancestorIsEditable = true
+                break
+            }
+            if parentRole == "AXWebArea" {
+                break
+            }
+            currentParent = parentEl
+        }
+
+        return Self.isEditableElementMetadata(
+            role: role,
+            subrole: subrole,
+            isEditableAttr: isEditableAttr,
+            isValueSettable: isValueSettable,
+            isSelectedTextSettable: isSelectedTextSettable,
+            ancestorIsEditable: ancestorIsEditable
+        )
+    }
+
     /// Ensures Electron/Chromium apps expose their AX tree (AXManualAccessibility).
     public func ensureManualAccessibility(for pid: pid_t) {
         lock.lock()
@@ -242,7 +402,8 @@ public final class AccessibilityBridge: @unchecked Sendable {
     /// Reads the full text AND cursor position from the focused UI element, extracting the exact word at the cursor,
     /// the preceding word, and the following word (even when editing in the middle of a sentence).
     public func readFocusedTextContext() -> FocusedTextContext? {
-        guard let element = focusedUIElement() else { return nil }
+        guard isFocusedElementEditableTextInput(),
+              let element = focusedUIElement() else { return nil }
         var valueRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
               let fullText = valueRef as? String else {

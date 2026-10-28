@@ -450,9 +450,11 @@ public final class EventTapHook: @unchecked Sendable {
             }
             lock.withLock { isCursorKnownAtEnd = false }
             engine.reset()
-            if isWithinTypingActivityWindow(seconds: 3600.0) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
-                    self?.notifyTypingState()
+            onDismissHUD?()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                    TypingBuffer.shared.clear()
+                    self?.onDismissHUD?()
                 }
             }
             return Unmanaged.passUnretained(event)
@@ -507,9 +509,11 @@ public final class EventTapHook: @unchecked Sendable {
             return nil
         }
 
-        // Secure / Password / Hidden Text Field Guard:
-        // Never transform Telex/VNI, never display Caret Pill HUD, and never log or send to AI when typing in a password field.
-        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+        // Secure / Password / Hidden Text Field OR Non-Editable Browser/App Element Guard:
+        // Never transform Telex/VNI, never display Caret Pill HUD, and never intercept keys when not focused in an editable text box.
+        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() ||
+           !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+            cancelPendingDoubleTab(flushSingleTab: false)
             engine.reset()
             clearMouseReset()
             TypingBuffer.shared.clear()
@@ -705,7 +709,8 @@ public final class EventTapHook: @unchecked Sendable {
 
     /// Broadcasts the current composing word and sentence context to the Caret Pill HUD.
     public func notifyTypingState() {
-        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() ||
+           !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
             engine.reset()
             clearMouseReset()
             TypingBuffer.shared.clear()

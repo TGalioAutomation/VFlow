@@ -424,6 +424,14 @@ public final class CaretHUDModel: ObservableObject {
 
         self.suggestions = immediateSuggestions
 
+        // Never show a blank "Đang gõ văn bản..." pill when both the text and suggestions are empty
+        if fullSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+           currentWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+           immediateSuggestions.isEmpty {
+            hideHUD()
+            return
+        }
+
         // Pulse the 120fps Silk Sine-Wave
         self.audioLevel = min(1.0, self.audioLevel + 0.35)
         scheduleWaveDecay()

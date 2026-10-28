@@ -70,19 +70,30 @@ public final class CaretLocator: @unchecked Sendable {
         }
 
         // 2. Fallback: Element position and size (e.g. Electron / Chromium AXTextArea / AXTextField)
-        var posValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(focusedElement, kAXPositionAttribute as CFString, &posValue) == .success,
-           AXUIElementCopyAttributeValue(focusedElement, kAXSizeAttribute as CFString, &sizeValue) == .success,
-           let posVal = posValue, let sizeVal = sizeValue {
-            var point = CGPoint.zero
-            var size = CGSize.zero
-            AXValueGetValue(posVal as! AXValue, .cgPoint, &point)
-            AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
-            if size.width > 0 && size.height > 0 {
-                let effectiveHeight = min(size.height, 48.0)
-                let rect = CGRect(origin: point, size: CGSize(width: min(size.width, 420.0), height: effectiveHeight))
-                return convertToAppKitCoordinates(rect)
+        // Never anchor to non-input containers like AXWebArea, AXWindow, or AXScrollArea!
+        var roleRef: CFTypeRef?
+        let roleStr: String = {
+            if AXUIElementCopyAttributeValue(focusedElement, kAXRoleAttribute as CFString, &roleRef) == .success,
+               let r = roleRef as? String {
+                return r
+            }
+            return ""
+        }()
+        if roleStr != "AXWebArea" && roleStr != "AXWindow" && roleStr != "AXScrollArea" {
+            var posValue: CFTypeRef?
+            var sizeValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(focusedElement, kAXPositionAttribute as CFString, &posValue) == .success,
+               AXUIElementCopyAttributeValue(focusedElement, kAXSizeAttribute as CFString, &sizeValue) == .success,
+               let posVal = posValue, let sizeVal = sizeValue {
+                var point = CGPoint.zero
+                var size = CGSize.zero
+                AXValueGetValue(posVal as! AXValue, .cgPoint, &point)
+                AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
+                if size.width > 0 && size.height > 0 && !(size.width > 600 && size.height > 320) {
+                    let effectiveHeight = min(size.height, 48.0)
+                    let rect = CGRect(origin: point, size: CGSize(width: min(size.width, 420.0), height: effectiveHeight))
+                    return convertToAppKitCoordinates(rect)
+                }
             }
         }
 

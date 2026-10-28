@@ -58,6 +58,29 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     logger.info("Keyboard EventTap auto-activated!")
                 }
             }
+            Task { @MainActor in
+                if CaretPillWindow.shared.isVisible,
+                   !CaretHUDModel.shared.isApplyingSuggestion,
+                   !CaretHUDModel.shared.isSuggestionAppliedSuccess,
+                   CaretHUDModel.shared.state == .transcript {
+                    if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() ||
+                       AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+                        CaretHUDModel.shared.hideHUD()
+                    }
+                }
+            }
+        }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                    CaretHUDModel.shared.hideHUD()
+                }
+            }
         }
 
         // 4. Initialize Centralized Control Center Store & Setup Menu Bar Status Item
@@ -66,11 +89,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         EventTapHook.shared.onInputMethodChanged = { [weak self] newMethod in
             Task { @MainActor in
                 VFlowControlCenterStore.shared.syncInputMethodFromExternal(newMethod)
-                self?.presentCaretHUDAtFocusedElement(
-                    composingWord: "",
-                    rawWord: "",
-                    sentenceWords: []
-                )
+                if AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                    self?.presentCaretHUDAtFocusedElement(
+                        composingWord: "",
+                        rawWord: "",
+                        sentenceWords: []
+                    )
+                } else {
+                    CaretHUDModel.shared.hideHUD()
+                }
             }
         }
         MenuBarCoordinator.shared.onOpenSettings = {
@@ -102,15 +129,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !CommandLine.arguments.contains("--daemon") || CommandLine.arguments.contains("--show-settings") {
             BentoSettingsWindowController.shared.showWindow()
-        }
-
-        // Show initial Live Caret Pill HUD at the active text box right away
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            self?.presentCaretHUDAtFocusedElement(
-                composingWord: "",
-                rawWord: "",
-                sentenceWords: []
-            )
         }
     }
 

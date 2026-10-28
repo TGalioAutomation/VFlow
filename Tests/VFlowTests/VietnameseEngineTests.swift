@@ -990,5 +990,30 @@ final class VietnameseEngineTests: XCTestCase {
         )
         XCTAssertTrue(tab2)
         XCTAssertEqual(shortcutAcceptedIndex, 0)
+
+        // 8. Verify Browser non-editable elements (AXWebArea, AXLink, AXButton, AXGroup) are rejected
+        // while real text inputs (AXTextField, AXTextArea, contenteditable) are accepted
+        XCTAssertFalse(AccessibilityBridge.isEditableElementMetadata(role: "AXWebArea"))
+        XCTAssertFalse(AccessibilityBridge.isEditableElementMetadata(role: "AXLink"))
+        XCTAssertFalse(AccessibilityBridge.isEditableElementMetadata(role: "AXButton"))
+        XCTAssertFalse(AccessibilityBridge.isEditableElementMetadata(role: "AXWindow"))
+        XCTAssertFalse(AccessibilityBridge.isEditableElementMetadata(role: "AXGroup", isValueSettable: false))
+        XCTAssertTrue(AccessibilityBridge.isEditableElementMetadata(role: "AXTextField"))
+        XCTAssertTrue(AccessibilityBridge.isEditableElementMetadata(role: "AXTextArea"))
+        XCTAssertTrue(AccessibilityBridge.isEditableElementMetadata(role: "AXGroup", isEditableAttr: true))
+        XCTAssertTrue(AccessibilityBridge.isEditableElementMetadata(role: "AXStaticText", ancestorIsEditable: true))
+
+        // 9. Verify CaretHUDModel.updateOnTyping hides HUD when text and suggestions are empty (no "Đang gõ văn bản..." phantom pill)
+        hud.isApplyingSuggestion = false
+        hud.isSuggestionAppliedSuccess = false
+        hud.updateOnTyping(
+            currentWord: "",
+            rawWord: "",
+            sentenceWords: [],
+            inputMethod: .telex,
+            caretFrame: CGRect(x: 200, y: 200, width: 460, height: 52),
+            fullSentenceText: ""
+        )
+        XCTAssertFalse(CaretPillWindow.shared.isVisible)
     }
 }
