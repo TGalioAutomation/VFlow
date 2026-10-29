@@ -11,9 +11,9 @@
 [![Architecture Apple Silicon arm64](https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-0071E3?style=flat-square&logo=apple&logoColor=white)](https://apple.com)
 [![100% On-Device AI](https://img.shields.io/badge/AI-100%25%20On--Device%20CoreML%20%2F%20Neural-8A2BE2?style=flat-square)](https://github.com/TGalioAutomation/VFlow)
 [![Zero Cloud Telemetry](https://img.shields.io/badge/Privacy-Zero%20Cloud%20Telemetry-10B981?style=flat-square)](https://github.com/TGalioAutomation/VFlow)
-[![171/171 Tests Passing](https://img.shields.io/badge/Tests-171%2F171%20Passing-success?style=flat-square&logo=xcode&logoColor=white)](https://github.com/TGalioAutomation/VFlow)
+[![186/186 Tests Passing](https://img.shields.io/badge/Tests-186%2F186%20Passing-success?style=flat-square&logo=xcode&logoColor=white)](https://github.com/TGalioAutomation/VFlow)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero%20Third--Party-FFB800?style=flat-square)](Package.swift)
-[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0-blueviolet?style=flat-square&logo=github)](https://github.com/TGalioAutomation/VFlow/releases/latest)
+[![Release v1.0.1](https://img.shields.io/badge/Release-v1.0.1-blueviolet?style=flat-square&logo=github)](https://github.com/TGalioAutomation/VFlow/releases/latest)
 [![License MIT / Apache-2.0](https://img.shields.io/badge/License-MIT%20%2F%20Apache--2.0-blue?style=flat-square)](LICENSE)
 
 [**Website & Live Demo**](https://tgalioautomation.github.io/VFlow/) • [**Download Latest Release**](https://github.com/TGalioAutomation/VFlow/releases/latest) • [**Release Notes**](RELEASE_NOTES.md) • [**Bug Audit Report**](BUG_AUDIT_REPORT.md)
@@ -89,8 +89,8 @@ Floating seamlessly beside your cursor, VFlow presents three tiers of real-time 
 ### Option 1: Direct Download (Pre-built DMG / ZIP)
 
 1. Download the latest release from the [**Releases Page**](https://github.com/TGalioAutomation/VFlow/releases/latest):
-   - **DMG Package**: [`VFlow-v1.0.0-macOS-arm64.dmg`](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg)
-   - **ZIP Archive**: [`VFlow-v1.0.0-macOS-arm64.zip`](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.zip)
+   - **DMG Package**: [`VFlow-v1.0.1-macOS-arm64.dmg`](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.1-macOS-arm64.dmg)
+   - **ZIP Archive**: [`VFlow-v1.0.1-macOS-arm64.zip`](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.1-macOS-arm64.zip)
 2. Open the `.dmg` file and drag **VFlow.app** into your `/Applications` folder.
 3. Launch VFlow from `/Applications` or via Spotlight (`⌘Space` → "VFlow").
 
@@ -101,7 +101,7 @@ Floating seamlessly beside your cursor, VFlow presents three tiers of real-time 
 git clone https://github.com/TGalioAutomation/VFlow.git
 cd VFlow
 
-# 2. Run the test suite (171 tests)
+# 2. Run the test suite (186 tests)
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 
 # 3. Build and package the signed application bundle
@@ -170,8 +170,9 @@ VFlow/
 │       ├── AppDelegate.swift         # Lifecycle, permission onboarding, global event routing
 │       └── main.swift                # Native application startup
 ├── Tests/
-│   └── VFlowTests/                   # 171 Unit, integration & adversarial regression tests
+│   └── VFlowTests/                   # 186 Unit, integration & adversarial regression tests
 │       ├── VietnameseEngineTests.swift
+│       ├── VietnameseSuggestionAccuracyTests.swift
 │       ├── AdversarialBoundaryStressTests.swift
 │       ├── DeepBugDiscoveryTests.swift
 │       └── NewFeaturesVerificationTests.swift
@@ -182,16 +183,16 @@ VFlow/
 │   ├── index.html                    # Liquid Glass promotional page with interactive live typing demo
 │   └── assets/                       # 3D Liquid Glass assets (app_icon, voice_orb, neural_core)
 └── build/                            # Local release bundles & distributables
-    └── release/                      # VFlow-v1.0.0-macOS-arm64.dmg, .zip, SHA256SUMS.txt
+    └── release/                      # VFlow-v1.0.1-macOS-arm64.dmg, .zip, SHA256SUMS.txt
 ```
 
 ---
 
-## 📊 Release Readiness Scorecard (v1.0.0)
+## 📊 Release Readiness Scorecard (v1.0.1)
 
 | Audit Domain | Acceptance Standard | Verified Status | Evidence |
 |---|---|---|---|
-| **Test Suite Coverage** | 100% Pass Rate across all unit & adversarial suites | **PASSED** (171/171) | `Executed 171 tests, with 0 failures in 3.14s` |
+| **Test Suite Coverage** | 100% Pass Rate across all unit & adversarial suites | **PASSED** (186/186) | `Executed 186 tests, with 0 failures` |
 | **Swift Concurrency** | Swift 6 strict concurrency compliance | **PASSED** | Zero warnings under `@MainActor` and `NSLock` |
 | **Clean-Room Mutants** | 3/3 Broken Mutants killed | **PASSED** (100% Kill) | Mutants 1, 2, and 3 failed expectedly |
 | **Third-Party Bloat** | Zero third-party dependencies | **PASSED** | `dependencies: []` in `Package.swift` |
@@ -203,7 +204,7 @@ VFlow/
 
 ---
 
-## 🔒 Verification & Checksums (v1.0.0)
+## 🔒 Verification & Checksums (v1.0.1)
 
 To verify the integrity of downloaded release packages:
 
@@ -215,8 +216,8 @@ shasum -a 256 -c SHA256SUMS.txt
 ### Official SHA-256 Hashes
 
 ```text
-e4fa6e44f0a62b30e416b96ca8c19c4aaad5dcfac01bc3e6290b16d1d0c251e7  VFlow-v1.0.0-macOS-arm64.dmg
-4aac3a5d92122055ba1fe5bebfd63adca84aab173bdbff3a1cc6d4d3922f2038  VFlow-v1.0.0-macOS-arm64.zip
+a354d13294985719712a1eecd994a5212278759ae1b4d38f35c5ade40ee053de  VFlow-v1.0.1-macOS-arm64.dmg
+9d04c0a9b64e3330200478e35ee7a8bedd77078635d33787830b88424c7ed069  VFlow-v1.0.1-macOS-arm64.zip
 ```
 
 ---

@@ -5,8 +5,8 @@ set -euo pipefail
 # VFlow Release Packaging Script
 # Packages production distributable artifacts:
 #   - build/VFlow.app (Codesigned native macOS application bundle)
-#   - build/release/VFlow-v1.0.0-macOS-arm64.dmg (Compressed DMG with /Applications link)
-#   - build/release/VFlow-v1.0.0-macOS-arm64.zip (Resource-fork preserved ZIP via ditto)
+#   - build/release/VFlow-v1.0.1-macOS-arm64.dmg (Compressed DMG with /Applications link)
+#   - build/release/VFlow-v1.0.1-macOS-arm64.zip (Resource-fork preserved ZIP via ditto)
 #   - build/release/SHA256SUMS.txt (SHA-256 checksums verifiable via shasum)
 # ==============================================================================
 
@@ -15,7 +15,7 @@ WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$WORKSPACE_ROOT/build"
 APP_BUNDLE="$BUILD_DIR/VFlow.app"
 RELEASE_DIR="$BUILD_DIR/release"
-VERSION="v1.0.0"
+VERSION="v1.0.1"
 ARCH="macOS-arm64"
 DMG_NAME="VFlow-${VERSION}-${ARCH}.dmg"
 ZIP_NAME="VFlow-${VERSION}-${ARCH}.zip"

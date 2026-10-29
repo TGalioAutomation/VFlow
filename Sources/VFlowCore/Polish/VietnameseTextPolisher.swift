@@ -30,6 +30,32 @@ public struct VietnameseTextPolisher: Sendable {
         "uh", "um", "umm", "uhh", "er", "erm", "hmm", "basically", "literally"
     ]
 
+    /// Common English grammar, pronoun, auxiliary, verb, and everyday vocabulary for language detection and repeated-letter typo recovery.
+    public static let enGrammarAndCommonWords: Set<String> = [
+        "i", "im", "ive", "ill", "id", "you", "your", "youre", "he", "hes", "him", "his", "she", "shes", "her",
+        "it", "its", "we", "were", "us", "our", "they", "theyre", "them", "their", "there", "this", "that", "these", "those",
+        "the", "a", "an", "to", "of", "in", "on", "at", "by", "for", "with", "from", "into", "about", "after", "before",
+        "between", "without", "through", "during", "until", "against", "among", "within", "because", "although", "though",
+        "since", "unless", "while", "when", "where", "what", "which", "who", "whom", "whose", "why", "how", "whether",
+        "am", "is", "are", "was", "been", "being", "be", "have", "has", "had", "having", "do", "does", "did", "done", "doing",
+        "dont", "doesnt", "didnt", "cant", "cannot", "wont", "wouldnt", "shouldnt", "couldnt", "isnt", "arent", "wasnt",
+        "werent", "havent", "hasnt", "hadnt", "will", "would", "shall", "should", "can", "could", "may", "might", "must",
+        "go", "goes", "went", "gone", "going", "work", "works", "worked", "working", "make", "makes", "made", "making",
+        "take", "takes", "took", "taken", "see", "sees", "saw", "seen", "know", "knows", "knew", "known", "think", "thinks",
+        "thought", "want", "wants", "wanted", "need", "needs", "needed", "use", "uses", "used", "using", "try", "tries",
+        "tried", "trying", "check", "checks", "checked", "checking", "test", "tests", "tested", "testing", "write", "writes",
+        "wrote", "written", "buy", "buys", "bought", "eat", "eats", "ate", "eaten", "come", "comes", "came", "send", "sends",
+        "sent", "give", "gives", "gave", "given", "find", "finds", "found", "tell", "tells", "told", "ask", "asks", "asked",
+        "seem", "seems", "look", "looks", "looked", "looking", "forward", "hear", "hearing", "discuss", "discussed",
+        "explain", "listen", "depend", "depends", "interested", "time", "ready", "home", "school", "yesterday", "today",
+        "tomorrow", "week", "month", "year", "night", "morning", "ago", "please", "help", "helps", "fix", "bug", "error",
+        "issue", "problem", "answer", "question", "apple", "idea", "hour", "option", "update", "example", "grammar",
+        "english", "vietnamese", "sentence", "word", "words", "good", "better", "best", "bad", "worse", "worst", "more",
+        "most", "many", "much", "some", "any", "every", "all", "very", "new", "old", "fast", "faster", "easy", "easier",
+        "information", "informations", "advice", "advices", "equipment", "equipments", "knowledge", "knowledges", "feedback", "feedbacks",
+        "sunny", "land", "friend", "thanks", "thank", "yes", "no", "not", "so", "now", "well", "again", "still", "always", "never"
+    ]
+
     /// Detects whether a text string is primarily English (no Vietnamese diacritics/teencode and contains English words).
     public static func isPrimarilyEnglish(_ text: String) -> Bool {
         let tokens = text.lowercased()
@@ -45,7 +71,8 @@ public struct VietnameseTextPolisher: Sendable {
             "chua", "nhung", "nguoi", "truoc", "phai", "biet", "muon", "cung", "nhieu", "luon", "moi",
             "tieng", "viet", "viec", "hoat", "thuc", "that", "thaat", "tot", "nua", "chang", "hien", "thi",
             "cua", "voi", "cho", "lam", "xem", "nghi", "thay", "chuan", "nghia", "phan", "giao", "dien",
-            "kiem", "sua", "loi", "nganh", "nghanh", "phap"
+            "kiem", "sua", "loi", "nganh", "nghanh", "phap",
+            "cah", "cach", "gi"
         ]
         for tok in tokens {
             if vnMarkers.contains(tok) { return false }
@@ -56,35 +83,48 @@ public struct VietnameseTextPolisher: Sendable {
             }
         }
 
-        let enGrammarAndCommonWords: Set<String> = [
+        let lowerText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let knownEnglishPhrases = [
+            "la la land", "a sunny day", "have a nice day", "day by day", "one day", "sunny day", "rainy day"
+        ]
+        if knownEnglishPhrases.contains(where: { lowerText.contains($0) }) {
+            return true
+        }
+
+        let unambiguousEnglishMarkers: Set<String> = [
+            "the", "a", "an", "this", "that", "these", "those",
             "i", "im", "ive", "ill", "id", "you", "your", "youre", "he", "hes", "him", "his", "she", "shes", "her",
-            "it", "its", "we", "were", "us", "our", "they", "theyre", "them", "their", "there", "this", "that", "these", "those",
-            "the", "a", "an", "to", "of", "in", "on", "at", "by", "for", "with", "from", "into", "about", "after", "before",
-            "between", "without", "through", "during", "until", "against", "among", "within", "because", "although", "though",
-            "since", "unless", "while", "when", "where", "what", "which", "who", "whom", "whose", "why", "how", "whether",
-            "am", "is", "are", "was", "been", "being", "be", "have", "has", "had", "having", "do", "does", "did", "done", "doing",
-            "dont", "doesnt", "didnt", "cant", "cannot", "wont", "wouldnt", "shouldnt", "couldnt", "isnt", "arent", "wasnt",
-            "werent", "havent", "hasnt", "hadnt", "will", "would", "shall", "should", "can", "could", "may", "might", "must",
-            "go", "goes", "went", "gone", "going", "work", "works", "worked", "working", "make", "makes", "made", "making",
-            "take", "takes", "took", "taken", "see", "sees", "saw", "seen", "know", "knows", "knew", "known", "think", "thinks",
-            "thought", "want", "wants", "wanted", "need", "needs", "needed", "use", "uses", "used", "using", "try", "tries",
-            "tried", "trying", "check", "checks", "checked", "checking", "test", "tests", "tested", "testing", "write", "writes",
-            "wrote", "written", "buy", "buys", "bought", "eat", "eats", "ate", "eaten", "come", "comes", "came", "send", "sends",
-            "sent", "give", "gives", "gave", "given", "find", "finds", "found", "tell", "tells", "told", "ask", "asks", "asked",
-            "seem", "seems", "look", "looks", "looked", "looking", "forward", "hear", "hearing", "discuss", "discussed",
-            "explain", "listen", "depend", "depends", "interested", "time", "ready", "home", "school", "yesterday", "today",
-            "tomorrow", "week", "month", "year", "night", "morning", "ago", "please", "help", "helps", "fix", "bug", "error",
-            "issue", "problem", "answer", "question", "apple", "idea", "hour", "option", "update", "example", "grammar",
-            "english", "vietnamese", "sentence", "word", "words", "good", "better", "best", "bad", "worse", "worst", "more",
-            "most", "many", "much", "some", "any", "every", "all", "very", "new", "old", "fast", "faster", "easy", "easier",
-            "information", "informations", "advice", "advices", "equipment", "equipments", "knowledge", "knowledges", "feedback", "feedbacks"
+            "it", "its", "we", "were", "us", "our", "they", "theyre", "them", "their", "there", "my",
+            "is", "am", "are", "was", "been", "being", "have", "has", "had", "having",
+            "dont", "doesnt", "didnt", "cant", "cannot", "wont", "wouldnt", "shouldnt", "couldnt", "isnt", "arent", "wasnt", "werent",
+            "will", "would", "shall", "should", "could", "must", "might",
+            "what", "where", "when", "why", "how", "who", "whom", "whose", "which",
+            "with", "from", "into", "about", "after", "before", "between", "without", "through", "during", "because", "although", "since",
+            "please", "help", "good", "better", "best", "very", "today", "yesterday", "tomorrow",
+            "sunny", "land", "school", "friend", "thanks", "thank"
         ]
 
-        let enMatches = tokens.filter {
-            SmartEnglishDetector.commonEnglishWords.contains($0) ||
-            SmartEnglishDetector.contextualEnglishHomographs.contains($0) ||
-            TeencodeDictionary.englishMapping[$0] != nil ||
-            enGrammarAndCommonWords.contains($0)
+        let unaccentedVietnameseHomographs: Set<String> = [
+            "day", "can", "to"
+        ]
+
+        let hasUnambiguousEnglish = tokens.contains { tok in
+            let normTok = TeencodeDictionary.normalizeEnglishRepeatedLetters(tok)?.lowercased() ?? tok
+            return unambiguousEnglishMarkers.contains(tok) ||
+                unambiguousEnglishMarkers.contains(normTok) ||
+                tok.contains("ss") || tok.contains("ff") || tok.contains("rr") || tok.contains("ck")
+        }
+
+        let enMatches = tokens.filter { tok in
+            let normTok = TeencodeDictionary.normalizeEnglishRepeatedLetters(tok)?.lowercased() ?? tok
+            if !hasUnambiguousEnglish && (unaccentedVietnameseHomographs.contains(tok) || unaccentedVietnameseHomographs.contains(normTok)) {
+                return false
+            }
+            return SmartEnglishDetector.commonEnglishWords.contains(tok) ||
+                SmartEnglishDetector.contextualEnglishHomographs.contains(tok) ||
+                TeencodeDictionary.englishMapping[tok] != nil ||
+                enGrammarAndCommonWords.contains(tok) ||
+                TeencodeDictionary.normalizeEnglishRepeatedLetters(tok) != nil
         }.count
 
         return enMatches * 2 >= tokens.count
@@ -292,6 +332,13 @@ public struct VietnameseTextPolisher: Sendable {
 
     /// Common typo & unsigned Vietnamese token repairs when polishing Vietnamese text.
     public static let typoTokenFixes: [String: String] = [
+        "cah": "cách",
+        "cach": "cách",
+        "day": "đây",
+        "la": "là",
+        "gi": "gì",
+        "su": "sử",
+        "dung": "dụng",
         "ddwuocj": "được",
         "dduwocj": "được",
         "duoc": "được",
@@ -522,6 +569,15 @@ public struct VietnameseTextPolisher: Sendable {
 
         // Contextual multi-word, collocation typo & missing-bridge-word phrase repairs
         let phraseRepairs: [(String, String)] = [
+            ("c[aá]h\\s+s[uử]\\s+d[uụ]ng\\s+d[aâ]y\\s+l[aà]\\s+g[iì]", "cách sử dụng đây là gì"),
+            ("cah\\s+su\\s+d[uụ]ng\\s+day\\s+la\\s+gi", "cách sử dụng đây là gì"),
+            ("c[aá]h\\s+s[uử]\\s+d[uụ]ng", "cách sử dụng"),
+            ("cah\\s+su\\s+d[uụ]ng", "cách sử dụng"),
+            ("cach\\s+su\\s+d[uụ]ng", "cách sử dụng"),
+            ("d[aâ]y\\s+l[aà]\\s+g[iì]", "đây là gì"),
+            ("day\\s+la\\s+gi", "đây là gì"),
+            ("l[aà]\\s+g[iì]", "là gì"),
+            ("la\\s+gi", "là gì"),
             ("to\\s+go\\s+(?=tiếng|tieng|phím|phim|dấu|dau|chữ|chu)", "tôi gõ "),
             ("phân suggest", "phần suggest"),
             ("phan suggest", "phần suggest"),
@@ -540,10 +596,15 @@ public struct VietnameseTextPolisher: Sendable {
             ("that\\s+su", "thật sự"),
             ("that\\s+sư", "thật sự"),
             ("thật\\s+su", "thật sự"),
+            ("thật\\s+sử", "thật sự"),
+            ("that\\s+sử", "thật sự"),
+            ("thaat\\s+sử", "thật sự"),
             ("thuc\\s+su", "thực sự"),
             ("thực\\s+sư", "thực sự"),
             ("thuc\\s+sư", "thực sự"),
             ("thực\\s+su", "thực sự"),
+            ("thực\\s+sử", "thực sự"),
+            ("thuc\\s+sử", "thực sự"),
             ("co\\s+đang", "có đang"),
             ("hoạt\\s+động\\s+tot", "hoạt động tốt"),
             ("hoat\\s+dong", "hoạt động"),
@@ -574,6 +635,8 @@ public struct VietnameseTextPolisher: Sendable {
             ("co\\s+cau(?!\\s+(có|co|hỏi|hoi|nệ|ne)\\b)\\b", "có dấu"),
             ("đúng\\s+nghia", "đúng nghĩa"),
             ("dung\\s+nghia", "đúng nghĩa"),
+            ("dụng\\s+nghia", "đúng nghĩa"),
+            ("d[uụ]ng\\s+nghĩa", "đúng nghĩa"),
             ("đúng\\s+nghi\\b", "đúng nghĩa"),
             ("chuẩn\\s+hon", "chuẩn hơn"),
             ("chuan\\s+hon", "chuẩn hơn"),
@@ -584,6 +647,7 @@ public struct VietnameseTextPolisher: Sendable {
             ("tot\\s+lam", "tốt lắm"),
             ("đúng\\s+ra", "đúng ra"),
             ("dung\\s+ra", "đúng ra"),
+            ("dụng\\s+ra", "đúng ra"),
             ("theo\\s+như\\s+anh\\b", "theo như ảnh"),
             ("như\\s+anh\\s+thì", "như ảnh thì"),
             ("nhu\\s+anh\\s+thi", "như ảnh thì"),
@@ -617,9 +681,14 @@ public struct VietnameseTextPolisher: Sendable {
             ("ban\\s+phim", "bàn phím"),
             ("phím\\s+tat", "phím tắt"),
             ("phim\\s+tat", "phím tắt"),
+            ("s[uử]\\s+d[uụ]ng", "sử dụng"),
+            ("su\\s+d[uụ]ng", "sử dụng"),
             ("su\\s+dung", "sử dụng"),
             ("sử\\s+dung", "sử dụng"),
-            ("su\\s+dụng", "sử dụng"),
+            ("nội\\s+dụng", "nội dung"),
+            ("noi\\s+dụng", "nội dung"),
+            ("người\\s+dụng", "người dùng"),
+            ("nguoi\\s+dụng", "người dùng"),
             ("binh\\s+thuong", "bình thường"),
             ("không\\s+can\\s+thiet", "không cần thiết"),
             ("khong\\s+can\\s+thiet", "không cần thiết"),

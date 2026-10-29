@@ -267,8 +267,8 @@ public actor OnDeviceAIEngine {
         var results: [String] = []
         var seen: Set<String> = [trimmed.lowercased()]
 
-        // Query Vietnamese ("vi") first, then English ("en")
-        for lang in ["vi", "en"] {
+        let languages = VietnameseTextPolisher.isPrimarilyEnglish(contextString) ? ["en"] : ["vi", "en"]
+        for lang in languages {
             if let completions = checker.completions(
                 forPartialWordRange: range,
                 in: contextString,
@@ -350,8 +350,12 @@ public actor OnDeviceAIEngine {
                 let startClock = CFAbsoluteTimeGetCurrent()
                 let session = LanguageModelSession(instructions: Self.effectiveSystemInstructions)
                 let options = GenerationOptions(samplingMode: .greedy)
+                let isEnglishSentence = VietnameseTextPolisher.isPrimarilyEnglish(basePolished)
+                let promptText = isEnglishSentence
+                    ? "Correct English spelling and grammar (keep in English, do NOT translate or add Vietnamese diacritics) for: \(basePolished)"
+                    : "Correct Vietnamese typos, restore missing diacritics, and follow System Prompt for: \(basePolished)"
                 let response = try await session.respond(
-                    to: "Correct Vietnamese typos, restore missing diacritics, and follow System Prompt for: \(basePolished)",
+                    to: promptText,
                     generating: OnDeviceAISuggestions.self,
                     options: options
                 )
@@ -444,7 +448,7 @@ public actor OnDeviceAIEngine {
                   "properties" : {
                     "polishedSentence" : {
                       "type" : "string",
-                      "description" : "Câu tiếng Việt đã sửa lỗi chính tả, thêm dấu và chuẩn hóa theo System Prompt"
+                      "description" : "Câu tiếng Việt hoặc tiếng Anh đã sửa lỗi chính tả và ngữ pháp"
                     },
                     "nextWord" : {
                       "type" : "string",
@@ -464,6 +468,11 @@ public actor OnDeviceAIEngine {
                 let schemaURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vflow_fm_schema.json")
                 try? schemaJSON.write(to: schemaURL, atomically: true, encoding: .utf8)
 
+                let isEnglishSentence = VietnameseTextPolisher.isPrimarilyEnglish(basePolished)
+                let fmPrompt = isEnglishSentence
+                    ? "Correct English spelling and grammar (keep in English, do NOT translate or add Vietnamese diacritics): \(basePolished)"
+                    : "Sửa lỗi chính tả, khôi phục dấu tiếng Việt và chuẩn hóa theo System Prompt: \(basePolished)"
+
                 let proc = Process()
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/fm")
                 proc.arguments = [
@@ -473,7 +482,7 @@ public actor OnDeviceAIEngine {
                     "--guardrails", "permissive-content-transformations",
                     "-i", instructions,
                     "--schema", schemaURL.path,
-                    "Sửa lỗi chính tả, khôi phục dấu tiếng Việt và chuẩn hóa theo System Prompt: \(basePolished)"
+                    fmPrompt
                 ]
                 let outPipe = Pipe()
                 proc.standardOutput = outPipe
@@ -594,13 +603,24 @@ public actor OnDeviceAIEngine {
         ["xuat", "suat"],
         ["xung", "sung"],
         ["da", "gia"],
-        ["nhap", "nhat"]
+        ["nhap", "nhat"],
+        ["cah", "cach"],
+        ["day", "đây"],
+        ["la", "là"],
+        ["gi", "gì"],
+        ["ko", "khong"],
+        ["dc", "duoc"],
+        ["j", "gi"]
     ]
 
     public nonisolated static func areGrammaticallyEquivalentTokens(_ aRoot: String, _ bRoot: String) -> Bool {
         if aRoot == bRoot { return true }
+        let normA = TeencodeDictionary.normalizeEnglishRepeatedLetters(aRoot)?.lowercased() ?? aRoot
+        let normB = TeencodeDictionary.normalizeEnglishRepeatedLetters(bRoot)?.lowercased() ?? bRoot
+        if normA == normB { return true }
         for family in grammaticalLemmaFamilies {
-            if family.contains(aRoot) && family.contains(bRoot) {
+            if (family.contains(aRoot) || family.contains(normA)) &&
+               (family.contains(bRoot) || family.contains(normB)) {
                 return true
             }
         }
@@ -610,6 +630,13 @@ public actor OnDeviceAIEngine {
     /// Verifies that the Neural Engine candidate preserves all existing words from `base`
     /// (allowing unsigned -> signed Vietnamese diacritic restoration, English/Vietnamese grammatical inflection repairs, and at most 1 inserted bridge word).
     public nonisolated static func isValidRefinement(base: String, candidate: String) -> Bool {
+        // Never allow an LLM candidate to add Vietnamese diacritics onto a primarily English sentence
+        if VietnameseTextPolisher.isPrimarilyEnglish(base) {
+            if candidate.unicodeScalars.contains(where: { $0.value > 127 && $0.value != 0x2019 && $0.value != 0x2018 }) {
+                return false
+            }
+        }
+
         let baseTokens = base
             .components(separatedBy: .whitespaces)
             .map { $0.trimmingCharacters(in: .punctuationCharacters).lowercased() }

@@ -5,10 +5,10 @@
 ## Tài nguyên & Liên kết chính thức (Official Resources)
 
 - [Trang chủ & Trải nghiệm trực tiếp VFlow](https://tgalioautomation.github.io/VFlow/): Giao diện mô phỏng Caret Pill HUD 120fps, thử nghiệm `Tab-Tab` và `⌥Space` ngay trên trình duyệt.
-- [Mã nguồn GitHub (TGalioAutomation/VFlow)](https://github.com/TGalioAutomation/VFlow): Mã nguồn mở viết 100% bằng Swift 6 nguyên bản (Zero C++, Zero Dependencies), đạt 178/178 XCTest.
-- [Tải bộ cài VFlow v1.0.0 (.DMG cho Apple Silicon)](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.dmg): Bộ cài đặt chính thức cho macOS Sonoma, Sequoia và Tahoe (M1/M2/M3/M4).
-- [Tải bản nén VFlow v1.0.0 (.ZIP)](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.0-macOS-arm64.zip): Bản thực thi gọn nhẹ (4.3 MB) cho lập trình viên.
-- [Ghi chú phát hành (Release Notes v1.0.0)](https://github.com/TGalioAutomation/VFlow/blob/main/RELEASE_NOTES.md): Chi tiết kiến trúc FSM, 3-Tier Suggestion Engine và mã băm kiểm chứng SHA-256.
+- [Mã nguồn GitHub (TGalioAutomation/VFlow)](https://github.com/TGalioAutomation/VFlow): Mã nguồn mở viết 100% bằng Swift 6 nguyên bản (Zero C++, Zero Dependencies), đạt 186/186 XCTest.
+- [Tải bộ cài VFlow v1.0.1 (.DMG cho Apple Silicon)](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.1-macOS-arm64.dmg): Bộ cài đặt chính thức cho macOS Sonoma, Sequoia và Tahoe (M1/M2/M3/M4).
+- [Tải bản nén VFlow v1.0.1 (.ZIP)](https://github.com/TGalioAutomation/VFlow/releases/latest/download/VFlow-v1.0.1-macOS-arm64.zip): Bản thực thi gọn nhẹ (4.3 MB) cho lập trình viên.
+- [Ghi chú phát hành (Release Notes v1.0.1)](https://github.com/TGalioAutomation/VFlow/blob/main/RELEASE_NOTES.md): Chi tiết kiến trúc FSM, 3-Tier Suggestion Engine và mã băm kiểm chứng SHA-256.
 
 ## 3 Đột phá cốt lõi của VFlow (Core Innovations)
 
@@ -53,6 +53,6 @@
   VFlow nhận diện cấu trúc âm tiết tiếng Anh và từ khóa lập trình theo thời gian thực để giữ nguyên từ gốc (`salary`, `arrow`, `service`, `subclass`), hoặc cho phép gõ đúp phím dấu (`rr`, `ss`, `ff`) để hoàn nguyên chữ cái tiếng Anh tức thì.
 - **VFlow có thay thế được EVKey và GoTiengViet trên macOS Sonoma / Sequoia không?**
   Có. VFlow được xây dựng thuần bằng Swift 6 cho Apple Silicon với độ trễ dưới 2ms, khắc phục triệt để lỗi mất chữ đầu dòng trên thanh địa chỉ Chrome/Safari, đồng thời bổ sung sửa ngữ pháp `Tab-Tab` và đọc giọng nói `⌥Space`.
-- **Mã kiểm chứng toàn vẹn (SHA-256 Checksums) của bản v1.0.0 là gì?**
-  - `VFlow-v1.0.0-macOS-arm64.dmg`: `83ce6624e6f8da011d4c681a3fe59a94d94f06c85ad2f4211d8f811768065c27`
-  - `VFlow-v1.0.0-macOS-arm64.zip`: `6c69b4a5cb8ff4aa67be66fe686889fb074afc8ade9f0c105e6488ca0b3e02cc`
+- **Mã kiểm chứng toàn vẹn (SHA-256 Checksums) của bản v1.0.1 là gì?**
+  - `VFlow-v1.0.1-macOS-arm64.dmg`: `a354d13294985719712a1eecd994a5212278759ae1b4d38f35c5ade40ee053de`
+  - `VFlow-v1.0.1-macOS-arm64.zip`: `9d04c0a9b64e3330200478e35ee7a8bedd77078635d33787830b88424c7ed069`

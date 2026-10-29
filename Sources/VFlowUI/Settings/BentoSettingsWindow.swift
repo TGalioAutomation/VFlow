@@ -100,7 +100,7 @@ public struct BentoSettingsView: View {
                         Text("VFlow")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                        Text("1.0.0")
+                        Text("1.0.1")
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)

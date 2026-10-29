@@ -137,7 +137,12 @@ public struct SuggestionEngine: Sendable {
         "nghia": "nghĩa",
         "go": "gõ",
         "moi": "mới",
-        "su": "sử dụng",
+        "cah": "cách",
+        "cach": "cách",
+        "day": "đây",
+        "la": "là",
+        "gi": "gì",
+        "su": "sử",
         "dung": "dụng",
         "nua": "nữa",
         "chang": "chẳng",
@@ -188,14 +193,19 @@ public struct SuggestionEngine: Sendable {
         "co|dau": "dấu",
         "thật|sư": "sự",
         "thật|su": "sự",
+        "thật|sử": "sự",
         "that|su": "sự",
         "that|sư": "sự",
+        "that|sử": "sự",
         "thaat|sư": "sự",
         "thaat|su": "sự",
+        "thaat|sử": "sự",
         "thực|sư": "sự",
         "thực|su": "sự",
+        "thực|sử": "sự",
         "thuc|sư": "sự",
         "thuc|su": "sự",
+        "thuc|sử": "sự",
         "đúng|nghia": "nghĩa",
         "dung|nghia": "nghĩa",
         "đúng|nghi": "nghĩa",
@@ -215,6 +225,15 @@ public struct SuggestionEngine: Sendable {
         "ung|dung": "dụng",
         "sử|dung": "dụng",
         "su|dung": "dụng",
+        "cách|su": "sử",
+        "cach|su": "sử",
+        "cah|su": "sử",
+        "dụng|day": "đây",
+        "dung|day": "đây",
+        "đây|la": "là",
+        "day|la": "là",
+        "là|gi": "gì",
+        "la|gi": "gì",
         "người|dung": "dùng",
         "nguoi|dung": "dùng",
         "nội|dung": "dung",
@@ -414,6 +433,12 @@ public struct SuggestionEngine: Sendable {
         "veriaay|lỗi": "verify",
         "verif|lỗi": "verify",
         "veri|lỗi": "verify",
+        "dung|ra": "đúng",
+        "dụng|ra": "đúng",
+        "dung|nghĩa": "đúng",
+        "dụng|nghĩa": "đúng",
+        "dung|nghia": "đúng",
+        "dụng|nghia": "đúng",
         "phân|suggest": "phần",
         "phan|suggest": "phần",
         "phân|gợi": "phần",
@@ -501,7 +526,7 @@ public struct SuggestionEngine: Sendable {
                     for cand in singleWordCollocations {
                         let candLower = cand.lowercased()
                         let strippedCand = stripDiacritics(candLower)
-                        if strippedCand.count == strippedCurrent.count &&
+                        if abs(strippedCand.count - strippedCurrent.count) <= 1 &&
                            strippedCand.first == strippedCurrent.first &&
                            asciiEditDistance(strippedCand, strippedCurrent) == 1 {
                             return cand
@@ -531,6 +556,7 @@ public struct SuggestionEngine: Sendable {
         "người dùng", "nguyên nhân", "ngữ cảnh", "nhận diện", "nhanh chóng", "như thế nào", "nhưng", "nhiều", "nội dung",
         "mặc định", "môi trường", "mới", "mở", "màn hình",
         "sử dụng", "sửa lỗi", "sẵn sàng",
+        "cách sử dụng", "cách sử dụng đây là gì", "đây là gì",
         "thực hiện", "thành công", "thêm", "thay đổi", "thông minh", "thử nghiệm", "thị",
         "trực tiếp", "triển khai", "trình duyệt", "trạng thái", "trước"
     ]
@@ -639,6 +665,8 @@ public struct SuggestionEngine: Sendable {
 
     /// High-frequency English technical & everyday words for prefix completion.
     public static let englishCompletions: [String] = [
+        "can", "can't", "cannot", "could", "couldn't", "should", "shouldn't", "would", "wouldn't", "will", "won't",
+        "please", "thanks", "thank you", "today", "tomorrow", "yesterday", "because", "believe", "receive", "separate", "definitely",
         "suggest", "suggestion", "suggestions", "support", "system", "settings", "service", "server", "screen", "search", "status",
         "value", "values", "validation", "verify", "verified", "verification", "version", "view", "vietnamese",
         "text", "textarea", "testing", "terminal", "typescript", "token", "tab",
@@ -650,6 +678,29 @@ public struct SuggestionEngine: Sendable {
         "application", "architecture", "assistant", "autocomplete", "async",
         "window", "workflow", "workspace",
         "english", "environment", "error", "event", "update", "browser"
+    ]
+
+    /// English 2-Word (Bigram) Contextual Collocations for natural English phrase prediction.
+    public static let englishBigramCollocations: [String: [String]] = [
+        "i can": ["do it", "help", "see"],
+        "i can't": ["do it", "believe", "wait"],
+        "can do": ["it", "this", "that"],
+        "do it": ["now", "today", "again"],
+        "thank you": ["so much", "very much", "for"],
+        "looking forward": ["to", "to hearing", "to seeing"],
+        "let me": ["know", "check", "help"],
+        "how to": ["use", "fix", "do it"]
+    ]
+
+    /// English Single-Word (Unigram) Next-word collocations following a completed English word.
+    public static let englishNextWordCollocations: [String: [String]] = [
+        "i": ["can", "will", "think", "want"],
+        "can": ["do", "do it", "help", "you"],
+        "can't": ["do", "do it", "wait"],
+        "do": ["it", "this", "that"],
+        "it": ["is", "now", "today", "works"],
+        "please": ["help", "check", "let me know"],
+        "thank": ["you", "you so much"]
     ]
 
     /// Missing bridge words when the cursor is placed between two words (e.g. "không | thị" -> "hiển").
@@ -815,7 +866,10 @@ public struct SuggestionEngine: Sendable {
         }
         // Single-word check if only 1 word is typed
         if let first = rawTokens.first {
-            if instantWordFixes[first] != nil || TeencodeDictionary.mapping[first] != nil {
+            if instantWordFixes[first] != nil ||
+               TeencodeDictionary.mapping[first] != nil ||
+               TeencodeDictionary.englishMapping[first] != nil ||
+               TeencodeDictionary.normalizeEnglishRepeatedLetters(first) != nil {
                 return .moderate
             }
         }
@@ -907,6 +961,7 @@ public struct SuggestionEngine: Sendable {
             default: return tone
             }
         }()
+        let isEnglishContext = VietnameseTextPolisher.isPrimarilyEnglish(candidateFullSentence)
         let polishedFull = VietnameseTextPolisher.polish(candidateFullSentence, tone: effectiveTone)
         let sentenceSeverity = evaluateSeverity(
             rawSentence: candidateFullSentence,
@@ -914,24 +969,35 @@ public struct SuggestionEngine: Sendable {
             tone: effectiveTone
         )
 
-        // CASE 1: User is actively typing or cursor is on a word (e.g. "duoc|" inside "không  thị duoc| hết text")
+        // CASE 1: User is actively typing or cursor is on a word (e.g. "duoc|" inside "không  thị duoc| hết text" or "cannn|" inside "i cannn|")
         if !trimmedCurrent.isEmpty {
             let lowerCurrent = trimmedCurrent.lowercased()
             let lowerRaw = trimmedRaw.lowercased()
             let asciiCurrent = stripDiacritics(lowerCurrent)
 
             // 1A. Tier 1: Contextual Collocation Typo Fix + Custom Macro / Teencode / Shorthand / Typo instant expansion
-            let contextualFix = resolveContextualWordFix(
+            let contextualFix = isEnglishContext ? nil : resolveContextualWordFix(
                 prevWord: sentenceWords.last,
                 currentWord: lowerCurrent,
                 wordAfterCursor: wordAfterCursor
             )
-            let directVnExpanded = CustomMacroRegistry.shared.lookup(lowerCurrent)
-                ?? CustomMacroRegistry.shared.lookup(lowerRaw)
-                ?? TeencodeDictionary.mapping[lowerCurrent]
-                ?? TeencodeDictionary.mapping[lowerRaw]
-                ?? instantWordFixes[lowerCurrent]
-                ?? instantWordFixes[lowerRaw]
+            let directVnExpanded: String? = {
+                if let macro = CustomMacroRegistry.shared.lookup(lowerCurrent) ?? CustomMacroRegistry.shared.lookup(lowerRaw) {
+                    return macro
+                }
+                if isEnglishContext {
+                    // In English sentence context, only allow ASCII English typo fixes from instantWordFixes (never Vietnamese diacritic homographs like "day"->"đây", "that"->"thật")
+                    if let fix = instantWordFixes[lowerCurrent] ?? instantWordFixes[lowerRaw],
+                       fix.unicodeScalars.allSatisfy({ $0.value <= 127 }) {
+                        return fix
+                    }
+                    return nil
+                }
+                return TeencodeDictionary.mapping[lowerCurrent]
+                    ?? TeencodeDictionary.mapping[lowerRaw]
+                    ?? instantWordFixes[lowerCurrent]
+                    ?? instantWordFixes[lowerRaw]
+            }()
 
             if let primaryFix = contextualFix ?? directVnExpanded {
                 add(SuggestionItem(
@@ -942,7 +1008,10 @@ public struct SuggestionEngine: Sendable {
                     severity: max(.moderate, sentenceSeverity)
                 ))
             }
-            if let enExpanded = TeencodeDictionary.englishMapping[lowerCurrent] ?? TeencodeDictionary.englishMapping[lowerRaw] {
+            if let enExpanded = TeencodeDictionary.englishMapping[lowerCurrent]
+                ?? TeencodeDictionary.englishMapping[lowerRaw]
+                ?? TeencodeDictionary.normalizeEnglishRepeatedLetters(lowerCurrent)
+                ?? TeencodeDictionary.normalizeEnglishRepeatedLetters(lowerRaw) {
                 add(SuggestionItem(
                     text: enExpanded,
                     kind: .teencodeExpansion,
@@ -950,6 +1019,16 @@ public struct SuggestionEngine: Sendable {
                     targetWordToReplace: trimmedCurrent,
                     severity: max(.moderate, sentenceSeverity)
                 ))
+                // If user typed "cann" / "cannn", also offer "can't" as a helpful contraction alternative
+                if enExpanded.lowercased() == "can" {
+                    add(SuggestionItem(
+                        text: "can't",
+                        kind: .teencodeExpansion,
+                        replaceCurrentWord: true,
+                        targetWordToReplace: trimmedCurrent,
+                        severity: .moderate
+                    ))
+                }
             }
 
             // 1B. Tier 2: Full-Sentence / Full-Box Repair & Polish (up to 500 words across sentences & paragraphs)
@@ -977,7 +1056,8 @@ public struct SuggestionEngine: Sendable {
             }
 
             // Bridge word check when caret is touching the left word (e.g. "không| thị" -> "hiển")
-            if !wordAfterCursor.isEmpty,
+            if !isEnglishContext,
+               !wordAfterCursor.isEmpty,
                let bridge = resolveBridgeWord(left: trimmedCurrent, right: wordAfterCursor) {
                 add(SuggestionItem(
                     text: bridge,
@@ -987,49 +1067,66 @@ public struct SuggestionEngine: Sendable {
                 ))
             }
 
-            // 1C. Contextual Bigram/Unigram Collocation Prefix Match (e.g. prev="không", current="hi" -> "hiển thị")
-            if sentenceWords.count >= 2 {
-                let lastTwo = sentenceWords.suffix(2).map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }.joined(separator: " ")
-                if let biCands = bigramCollocations[lastTwo] {
-                    for cand in biCands {
+            // 1C. Contextual Bigram/Unigram Collocation Prefix Match
+            if isEnglishContext {
+                if sentenceWords.count >= 2 {
+                    let lastTwo = sentenceWords.suffix(2).map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }.joined(separator: " ")
+                    if let biCands = englishBigramCollocations[lastTwo] {
+                        for cand in biCands where cand.lowercased().hasPrefix(lowerCurrent) {
+                            add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
+                        }
+                    }
+                }
+                if let prevWord = sentenceWords.last?.lowercased().trimmingCharacters(in: .punctuationCharacters),
+                   let nextCandidates = englishNextWordCollocations[prevWord] {
+                    for cand in nextCandidates where cand.lowercased().hasPrefix(lowerCurrent) {
+                        add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
+                    }
+                }
+            } else {
+                if sentenceWords.count >= 2 {
+                    let lastTwo = sentenceWords.suffix(2).map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }.joined(separator: " ")
+                    if let biCands = bigramCollocations[lastTwo] {
+                        for cand in biCands {
+                            let candLower = cand.lowercased()
+                            if candLower.hasPrefix(lowerCurrent) || stripDiacritics(candLower).hasPrefix(asciiCurrent) {
+                                add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
+                            }
+                        }
+                    }
+                }
+                if let prevWord = sentenceWords.last?.lowercased().trimmingCharacters(in: .punctuationCharacters),
+                   let nextCandidates = nextWordCollocations[prevWord] {
+                    for cand in nextCandidates {
                         let candLower = cand.lowercased()
                         if candLower.hasPrefix(lowerCurrent) || stripDiacritics(candLower).hasPrefix(asciiCurrent) {
                             add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                         }
                     }
                 }
-            }
-            if let prevWord = sentenceWords.last?.lowercased().trimmingCharacters(in: .punctuationCharacters),
-               let nextCandidates = nextWordCollocations[prevWord] {
-                for cand in nextCandidates {
-                    let candLower = cand.lowercased()
-                    if candLower.hasPrefix(lowerCurrent) || stripDiacritics(candLower).hasPrefix(asciiCurrent) {
-                        add(SuggestionItem(text: cand, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
-                    }
-                }
-            }
 
-            // 1D. Vietnamese exact-diacritic prefix match (prioritized over English prefix matches)
-            for phrase in vietnamesePhrases {
-                let cleanPhrase = phrase.trimmingCharacters(in: .whitespaces)
-                let lowerPhrase = cleanPhrase.lowercased()
-                if lowerPhrase.hasPrefix(lowerCurrent) && lowerPhrase != lowerCurrent {
-                    add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
-                }
-            }
-
-            // 1E. Vietnamese ASCII/stripped-diacritic prefix match (e.g. "hien" -> "hiển thị", "chua" -> "chưa đạt", "va" -> "vào")
-            if items.count < 3 {
+                // 1D. Vietnamese exact-diacritic prefix match (prioritized over English prefix matches when not in English sentence context)
                 for phrase in vietnamesePhrases {
                     let cleanPhrase = phrase.trimmingCharacters(in: .whitespaces)
-                    let strippedPhrase = stripDiacritics(cleanPhrase.lowercased())
-                    if strippedPhrase.hasPrefix(asciiCurrent) && cleanPhrase.lowercased() != lowerCurrent {
+                    let lowerPhrase = cleanPhrase.lowercased()
+                    if lowerPhrase.hasPrefix(lowerCurrent) && lowerPhrase != lowerCurrent {
                         add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
                     }
                 }
+
+                // 1E. Vietnamese ASCII/stripped-diacritic prefix match (e.g. "hien" -> "hiển thị", "chua" -> "chưa đạt", "va" -> "vào")
+                if items.count < 3 {
+                    for phrase in vietnamesePhrases {
+                        let cleanPhrase = phrase.trimmingCharacters(in: .whitespaces)
+                        let strippedPhrase = stripDiacritics(cleanPhrase.lowercased())
+                        if strippedPhrase.hasPrefix(asciiCurrent) && cleanPhrase.lowercased() != lowerCurrent {
+                            add(SuggestionItem(text: cleanPhrase, kind: .wordCompletion, replaceCurrentWord: true, targetWordToReplace: trimmedCurrent, severity: sentenceSeverity))
+                        }
+                    }
+                }
             }
 
-            // 1F. English prefix match (evaluated after Vietnamese so English words like "val" don't crowd out "va" -> "vào")
+            // 1F. English prefix match
             if asciiCurrent.count >= 2 {
                 for enWord in englishCompletions {
                     let lowerEn = enWord.lowercased()
@@ -1044,14 +1141,15 @@ public struct SuggestionEngine: Sendable {
                 : items
         }
 
-        // CASE 2: Cursor is after a space (either at end of sentence or in a gap between two words like "không | thị")
+        // CASE 2: Cursor is after a space (either at end of sentence or in a gap between two words like "không | thị" or "i cannn do it ")
         if let lastWord = sentenceWords.last {
             let cleanLast = lastWord.trimmingCharacters(in: .punctuationCharacters)
             let lowerLast = cleanLast.lowercased()
             let lowerAfter = wordAfterCursor.trimmingCharacters(in: .punctuationCharacters).lowercased()
 
             // 2A. Missing bridge word in gap between two words (e.g. "không | thị" -> "⚡ hiển", "khong | thi" -> "⚡ hiển")
-            if !lowerAfter.isEmpty,
+            if !isEnglishContext,
+               !lowerAfter.isEmpty,
                let bridge = resolveBridgeWord(left: lastWord, right: lowerAfter) {
                 add(SuggestionItem(
                     text: bridge,
@@ -1061,15 +1159,35 @@ public struct SuggestionEngine: Sendable {
                 ))
             }
 
-            // 2B. If the just-completed word was a contextual typo, custom macro, teencode, or typo (e.g. "không cau ", "ko ", "ddwuocj ", "phân "),
+            // 2B. If the just-completed word was a contextual typo, custom macro, teencode, or English/Vietnamese typo (e.g. "không cau ", "ko ", "i cannn ", "i dont "),
             // offer a 1-click fix for THAT word first!
             let prevBeforeLast = sentenceWords.dropLast().last
-            let contextualLastFix = resolveContextualWordFix(
+            let contextualLastFix = isEnglishContext ? nil : resolveContextualWordFix(
                 prevWord: prevBeforeLast,
                 currentWord: lowerLast,
                 wordAfterCursor: lowerAfter
             )
-            if let wordFix = contextualLastFix ?? CustomMacroRegistry.shared.lookup(lowerLast) ?? TeencodeDictionary.mapping[lowerLast] ?? instantWordFixes[lowerLast],
+            let wordFixCandidate: String? = {
+                if let macro = CustomMacroRegistry.shared.lookup(lowerLast) {
+                    return macro
+                }
+                if isEnglishContext {
+                    if let enFix = TeencodeDictionary.englishMapping[lowerLast] ?? TeencodeDictionary.normalizeEnglishRepeatedLetters(lowerLast) {
+                        return enFix
+                    }
+                    if let asciiFix = instantWordFixes[lowerLast], asciiFix.unicodeScalars.allSatisfy({ $0.value <= 127 }) {
+                        return asciiFix
+                    }
+                    return nil
+                }
+                return contextualLastFix
+                    ?? TeencodeDictionary.mapping[lowerLast]
+                    ?? instantWordFixes[lowerLast]
+                    ?? TeencodeDictionary.englishMapping[lowerLast]
+                    ?? TeencodeDictionary.normalizeEnglishRepeatedLetters(lowerLast)
+            }()
+
+            if let wordFix = wordFixCandidate,
                wordFix.lowercased() != lowerLast {
                 add(SuggestionItem(
                     text: wordFix,
@@ -1079,6 +1197,16 @@ public struct SuggestionEngine: Sendable {
                     targetWordToReplace: cleanLast,
                     severity: max(.moderate, sentenceSeverity)
                 ))
+                if isEnglishContext && wordFix.lowercased() == "can" {
+                    add(SuggestionItem(
+                        text: "can't",
+                        kind: .teencodeExpansion,
+                        replaceCurrentWord: false,
+                        replaceLastCompletedWord: true,
+                        targetWordToReplace: cleanLast,
+                        severity: .moderate
+                    ))
+                }
             }
 
             // 2C. Tier 2: Full-Sentence / Full-Box Repair & Polish (up to 500 words across sentences & paragraphs)
@@ -1091,15 +1219,27 @@ public struct SuggestionEngine: Sendable {
                         replaceCurrentWord: false,
                         severity: max(.moderate, sentenceSeverity)
                     ))
+                    if isEnglishContext && candidateFullSentence.range(of: "(?i)\\bcann+\\b", options: .regularExpression) != nil {
+                        let cantVariant = polishedFull.replacingOccurrences(of: "(?i)\\bcan\\b", with: "can't", options: .regularExpression)
+                        if cantVariant.lowercased() != polishedFull.lowercased() {
+                            add(SuggestionItem(
+                                text: cantVariant,
+                                kind: .aiPolish,
+                                replaceCurrentWord: false,
+                                severity: .moderate
+                            ))
+                        }
+                    }
                 }
             }
 
-            // 2D. Bigram Next-Word Collocations (e.g. "không hiển" -> "thị", "hiển thị" -> "được", "chưa đạt" -> "value")
+            // 2D. Bigram Next-Word Collocations
             if sentenceWords.count >= 2 {
                 let lastTwo = sentenceWords.suffix(2)
                     .map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
                     .joined(separator: " ")
-                if let biCands = bigramCollocations[lastTwo] {
+                let biMap = isEnglishContext ? englishBigramCollocations : bigramCollocations
+                if let biCands = biMap[lastTwo] {
                     for cand in biCands {
                         add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false, severity: sentenceSeverity))
                     }
@@ -1107,7 +1247,8 @@ public struct SuggestionEngine: Sendable {
             }
 
             // 2E. Unigram Next-Word Collocations
-            if let nextCandidates = nextWordCollocations[lowerLast] {
+            let uniMap = isEnglishContext ? englishNextWordCollocations : nextWordCollocations
+            if let nextCandidates = uniMap[lowerLast] {
                 for cand in nextCandidates {
                     add(SuggestionItem(text: cand, kind: .nextWord, replaceCurrentWord: false, severity: sentenceSeverity))
                 }
