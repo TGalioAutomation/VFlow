@@ -137,28 +137,28 @@ function initInteractiveDemo() {
       status: '🛡️ Auto-Escape'
     },
     'en_grammar': {
-      before: '❌ Chưa sửa: "to dang lam viec. she dont know how to fix"',
-      after: '✅ Nhấn Tab-Tab ➔ "Tôi đang làm việc. She doesn\'t know how to fix it."',
-      text: 'to dang lam viec. she dont know how to fix this bug',
+      before: '❌ Chưa sửa: "cah su dung day la gi. i cannn do it"',
+      after: '✅ Nhấn Tab-Tab ➔ "Cách sử dụng đây là gì? I can do it."',
+      text: 'cah su dung day la gi. i cannn do it',
       t1: {
         key: '⇥',
         icon: '⚡',
-        label: "tôi đang làm việc. She doesn't know how to fix",
-        fullText: "tôi đang làm việc. She doesn't know how to fix this bug",
+        label: 'cách sử dụng đây là gì. I can do it',
+        fullText: 'cách sử dụng đây là gì. I can do it',
       },
       t2: {
         key: '⇥⇥',
         icon: '✨',
-        label: "Tôi đang làm việc. She doesn't know how to fix this bug.",
-        fullText: "Tôi đang làm việc. She doesn't know how to fix this bug.",
+        label: 'Cách sử dụng đây là gì? I can do it.',
+        fullText: 'Cách sử dụng đây là gì? I can do it.',
       },
       t3: {
         key: '⌥3',
         icon: '🔮',
-        label: 'right now',
-        fullText: "Tôi đang làm việc. She doesn't know how to fix this bug right now.",
+        label: "I can't do it",
+        fullText: "Cách sử dụng đây là gì? I can't do it.",
       },
-      status: '🇬🇧🇻🇳 Ngữ pháp'
+      status: '🇬🇧🇻🇳 Song ngữ'
     },
     'long_sentence': {
       before: '❌ Bộ gõ cũ: Gõ câu dài hoặc dấu chấm "." là mất ngữ cảnh',
@@ -199,6 +199,59 @@ function initInteractiveDemo() {
     return '…' + str.slice(-(maxLen - 1)).trimStart();
   }
 
+  function polishBilingualLive(raw) {
+    let s = raw.trim().replace(/\s+/g, ' ');
+    if (!s) return { tier1: '', tier2: '', tier3: 'tiếp tục...' };
+
+    // Phrase-level Vietnamese unaccented & English typo replacements
+    const phraseRules = [
+      [/\bcah\s+su\s+dung\s+day\s+la\s+gi\b/gi, 'cách sử dụng đây là gì'],
+      [/\bcach\s+su\s+dung\s+day\s+la\s+gi\b/gi, 'cách sử dụng đây là gì'],
+      [/\bcah\s+su\s+dung\b/gi, 'cách sử dụng'],
+      [/\bcach\s+su\s+dung\b/gi, 'cách sử dụng'],
+      [/\bsu\s+dung\b/gi, 'sử dụng'],
+      [/\bday\s+la\s+gi\b/gi, 'đây là gì'],
+      [/\bto\s+dang\s+lam\s+viec\b/gi, 'tôi đang làm việc'],
+      [/\bshe\s+dont\s+know\b/gi, "she doesn't know"],
+      [/\bi\s+cann+\s+do\s+it\b/gi, 'I can do it'],
+      [/\bi\s+cant+\s+do+\s+it+\b/gi, "I can't do it"],
+    ];
+    for (const [pat, rep] of phraseRules) {
+      s = s.replace(pat, rep);
+    }
+
+    // Token-level English repeated-letter & shorthand fixes
+    const enWordMap = {
+      'i': 'I', 'im': "I'm", 'dont': "don't", 'dontt': "don't",
+      'cant': "can't", 'cantt': "can't", 'cannt': "can't",
+      'cann': 'can', 'cannn': 'can', 'cannnn': 'can',
+      'dooo': 'do', 'ittt': 'it', 'willl': 'will', 'fixxx': 'fix',
+      'helppp': 'help', 'plsss': 'please', 'pls': 'please', 'thx': 'thanks'
+    };
+    const vnWordMap = {
+      'ko': 'không', 'khong': 'không', 'dc': 'được', 'duoc': 'được',
+      'cah': 'cách', 'cach': 'cách', 'gi': 'gì', 'ntn': 'như thế nào', 'mn': 'mọi người'
+    };
+
+    s = s.split(' ').map(tok => {
+      const lower = tok.toLowerCase();
+      if (enWordMap[lower]) return enWordMap[lower];
+      if (vnWordMap[lower]) return vnWordMap[lower];
+      return tok;
+    }).join(' ');
+
+    const tier1 = s;
+    let tier2 = s.charAt(0).toUpperCase() + s.slice(1);
+    if (!/[.!?]$/.test(tier2)) {
+      tier2 += /\blà gì$/i.test(tier2) ? '?' : '.';
+    }
+    const tier3 = /\bI can do it\b/i.test(tier1)
+      ? tier1.replace(/\bI can do it\b/i, "I can't do it")
+      : 'ngay bây giờ';
+
+    return { tier1, tier2, tier3 };
+  }
+
   function updateSuggestions(rawText, forcedScenarioKey = null) {
     if (window.triggerWavePulse) window.triggerWavePulse();
 
@@ -210,20 +263,20 @@ function initInteractiveDemo() {
         matched = demoScenarios['voice_ai'];
       } else if (trimmed.includes('salary') || trimmed.includes('calculatearrow')) {
         matched = demoScenarios['ary'];
-      } else if (trimmed.includes('she dont') || trimmed.includes('to dang')) {
+      } else if (trimmed === 'cah su dung day la gi. i cannn do it') {
         matched = demoScenarios['en_grammar'];
       } else if (trimmed.includes('nghi mot lat') || trimmed.length > 70) {
         matched = demoScenarios['long_sentence'];
       } else if (trimmed.length > 0) {
-        const polished = rawText.charAt(0).toUpperCase() + rawText.slice(1) + (/[.!?]$/.test(rawText) ? '' : '.');
+        const live = polishBilingualLive(rawText);
         matched = {
           before: '❌ Đang gõ: "' + smartEllipsis(rawText, 36) + '"',
-          after: '✅ Nhấn Tab-Tab để AI chuẩn hóa câu',
+          after: '✅ Nhấn Tab-Tab ➔ "' + smartEllipsis(live.tier2, 42) + '"',
           text: rawText,
-          t1: { key: '⇥', icon: '⚡', label: smartEllipsis(rawText), fullText: rawText },
-          t2: { key: '⇥⇥', icon: '✨', label: smartEllipsis(polished), fullText: polished },
-          t3: { key: '⌥3', icon: '🔮', label: 'tiếp tục...', fullText: polished + ' ' },
-          status: '⚡ Live'
+          t1: { key: '⇥', icon: '⚡', label: smartEllipsis(live.tier1), fullText: live.tier1 },
+          t2: { key: '⇥⇥', icon: '✨', label: smartEllipsis(live.tier2), fullText: live.tier2 },
+          t3: { key: '⌥3', icon: '🔮', label: smartEllipsis(live.tier3, 24), fullText: live.tier3.includes(' ') && live.tier3.length > 10 ? live.tier3 : (live.tier2.replace(/[.!?]$/, '') + ' ' + live.tier3 + '.') },
+          status: '⚡ Live AI'
         };
       }
     }
