@@ -102,14 +102,26 @@ public final class CaretLocator: @unchecked Sendable {
     }
 
     private func fallbackRectFromMouse() -> CGRect {
-        let mouseLoc = NSEvent.mouseLocation
-        return CGRect(x: mouseLoc.x, y: mouseLoc.y, width: 2.0, height: 16.0)
+        if Thread.isMainThread {
+            let mouseLoc = NSEvent.mouseLocation
+            return CGRect(x: mouseLoc.x, y: mouseLoc.y, width: 2.0, height: 16.0)
+        }
+        let primaryHeight = CGDisplayBounds(CGMainDisplayID()).height
+        if let loc = CGEvent(source: nil)?.location {
+            return CGRect(x: loc.x, y: primaryHeight - loc.y, width: 2.0, height: 16.0)
+        }
+        return CGRect(x: 600, y: 600, width: 2.0, height: 16.0)
     }
 
     /// Converts AX coordinates (origin at top-left of primary screen) to AppKit coordinates (origin at bottom-left).
     private func convertToAppKitCoordinates(_ axRect: CGRect) -> CGRect {
-        guard let primaryScreen = NSScreen.screens.first else { return axRect }
-        let screenHeight = primaryScreen.frame.height
+        let screenHeight: CGFloat
+        if Thread.isMainThread, let primaryScreen = NSScreen.screens.first {
+            screenHeight = primaryScreen.frame.height
+        } else {
+            screenHeight = CGDisplayBounds(CGMainDisplayID()).height
+        }
+        guard screenHeight > 0 else { return axRect }
         let appKitY = screenHeight - axRect.origin.y - axRect.height
         return CGRect(x: axRect.origin.x, y: appKitY, width: axRect.width, height: axRect.height)
     }

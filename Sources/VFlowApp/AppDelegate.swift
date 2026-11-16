@@ -7,6 +7,15 @@ import VFlowUI
 
 private let logger = Logger(subsystem: "com.apexdev.vflow", category: "AppDelegate")
 
+@objc private protocol StandardEditActions {
+    func undo(_ sender: Any?)
+    func redo(_ sender: Any?)
+    func cut(_ sender: Any?)
+    func copy(_ sender: Any?)
+    func paste(_ sender: Any?)
+    func selectAll(_ sender: Any?)
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tapMonitorTimer: Timer?
@@ -16,6 +25,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        BentoSettingsWindowController.shared.showWindow()
+        return true
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -32,21 +46,35 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             reason: "VFlow Real-Time System Keyboard EventTap"
         )
 
-        // 1. Check & prompt for accessibility permission if not already trusted
-        let trusted = AccessibilityBridge.shared.isAccessibilityGranted(prompt: true)
-        EventTapHook.shared.logDiagnostic("LAUNCH trusted=\(trusted) args=\(CommandLine.arguments)")
-        if !trusted {
-            logger.info("Accessibility permission not yet granted. Prompting user...")
+        // Ensure single-instance daemon: terminate any older lingering VFlow main processes before hooking EventTap
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        for running in NSRunningApplication.runningApplications(withBundleIdentifier: "com.apexdev.vflow")
+        where running.processIdentifier != currentPID {
+            running.terminate()
         }
 
-        // 2. Wire Live Caret Pill HUD & Smart Suggestion callbacks + Prewarm Apple On-Device Neural Engine LLM
+        // 1. Wire Live Caret Pill HUD & Smart Suggestion callbacks + Prewarm Apple On-Device Neural Engine LLM
         setupLiveCaretHUD()
         Task {
             await OnDeviceAIEngine.shared.prewarm()
         }
 
-        // 3. Start keyboard event tap hook immediately (and keep monitoring every 1.5s in case permission is granted while running)
-        let tapSuccess = EventTapHook.shared.start()
+        // 2. Start keyboard event tap hook immediately; if blocked by a stale TCC CDHash after rebuild, auto-reset TCC once per binary build
+        var trusted = AccessibilityBridge.shared.isAccessibilityGranted(prompt: false)
+        var tapSuccess = EventTapHook.shared.start()
+        if !trusted && !tapSuccess {
+            let execPath = Bundle.main.executablePath ?? CommandLine.arguments.first ?? ""
+            let modDate = (try? FileManager.default.attributesOfItem(atPath: execPath)[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            let fingerprint = "\(execPath)#\(Int(modDate))"
+            let lastResetKey = "vflow.tcc.lastAutoResetFingerprint"
+            if UserDefaults.standard.string(forKey: lastResetKey) != fingerprint {
+                UserDefaults.standard.set(fingerprint, forKey: lastResetKey)
+                VFlowControlCenterStore.shared.resetTCCPermissions()
+            }
+            trusted = AccessibilityBridge.shared.isAccessibilityGranted(prompt: true)
+            tapSuccess = EventTapHook.shared.start()
+        }
+        EventTapHook.shared.logDiagnostic("LAUNCH trusted=\(trusted) tap=\(tapSuccess) args=\(CommandLine.arguments)")
         if tapSuccess {
             logger.info("Keyboard EventTap successfully started.")
         } else {
@@ -64,8 +92,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                    !CaretHUDModel.shared.isApplyingSuggestion,
                    !CaretHUDModel.shared.isSuggestionAppliedSuccess,
                    CaretHUDModel.shared.state == .transcript {
-                    if !AccessibilityBridge.shared.isFocusedElementEditableTextInput() ||
-                       AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
+                    if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() ||
+                       AccessibilityBridge.shared.isBlockedFromTyping() {
                         CaretHUDModel.shared.hideHUD()
                     }
                 }
@@ -83,12 +111,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                AccessibilityBridge.shared.invalidateCache()
                 if let app = NSWorkspace.shared.frontmostApplication,
                    app.bundleIdentifier != Bundle.main.bundleIdentifier {
                     self?.lastExternalActiveApp = app
                 }
                 if !VoiceDictationService.shared.isRecording &&
-                   !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                   AccessibilityBridge.shared.isBlockedFromTyping() {
                     CaretHUDModel.shared.hideHUD()
                 }
             }
@@ -96,11 +125,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 4. Initialize Centralized Control Center Store & Setup Menu Bar Status Item
         _ = VFlowControlCenterStore.shared
+        setupMainMenu()
         MenuBarCoordinator.shared.setup()
         EventTapHook.shared.onInputMethodChanged = { [weak self] newMethod in
             Task { @MainActor in
                 VFlowControlCenterStore.shared.syncInputMethodFromExternal(newMethod)
-                if AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                if !AccessibilityBridge.shared.isBlockedFromTyping() &&
+                   !AccessibilityBridge.shared.isFocusedElementSecureOrHidden() {
                     self?.presentCaretHUDAtFocusedElement(
                         composingWord: "",
                         rawWord: "",
@@ -121,10 +152,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         }
 
-        // 5. Setup Push-to-Talk & Real-Time Voice-to-Text Pipeline
+        // 5. Setup Push-to-Talk & Real-Time Voice-to-Text Pipeline (clean up any stale worker from an older build first)
+        VoiceDictationService.shared.terminateSpeechWorker()
         setupVoiceDictationPipeline()
         VoiceDictationService.shared.prewarmSpeechWorkerIfNeeded()
         PushToTalkMonitor.shared.start()
+
+        // 5b. Check GitHub Releases automatically for VFlow updates (delayed so startup stays instant)
+        VFlowControlCenterStore.shared.scheduleAutomaticUpdateCheckIfNeeded()
 
         // 6. Set activationPolicy to accessory (Menu Bar + Floating Window) & load 3D Liquid Glass App Icon
         NSApp.setActivationPolicy(.accessory)
@@ -182,15 +217,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         EventTapHook.shared.onHUDMouseDown = { screenPoint in
-            MainActor.assumeIsolated {
-                CaretPillWindow.shared.handleMouseDown(atScreenPoint: screenPoint)
-            }
+            CaretPillWindow.threadSafeHandleMouseDown(atScreenPoint: screenPoint)
         }
 
         EventTapHook.shared.hasActiveSuggestions = {
-            MainActor.assumeIsolated {
-                CaretPillWindow.shared.isVisible && !CaretHUDModel.shared.visibleSuggestions.isEmpty
-            }
+            CaretHUDModel.threadSafeHasActiveSuggestions()
         }
 
         EventTapHook.shared.onDoubleTabArmedChanged = { isArmed in
@@ -200,6 +231,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         EventTapHook.shared.onTypingStateChanged = { [weak self] composingWord, rawWord, sentenceWords, method, fullSentenceText, wordAfterCursor in
+            let caretRectSnapshot = CaretLocator.shared.findCaretScreenRect()
             Task { @MainActor in
                 CaretHUDModel.shared.inputMethod = method
                 self?.presentCaretHUDAtFocusedElement(
@@ -207,15 +239,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     rawWord: rawWord,
                     sentenceWords: sentenceWords,
                     fullSentenceText: fullSentenceText,
-                    wordAfterCursor: wordAfterCursor
+                    wordAfterCursor: wordAfterCursor,
+                    precomputedCaretRect: caretRectSnapshot
                 )
             }
         }
 
         EventTapHook.shared.onSelectSuggestionShortcut = { [weak self] index in
-            MainActor.assumeIsolated {
+            guard CaretHUDModel.threadSafeCanSelectSuggestion(at: index) else {
+                return false
+            }
+            Task { @MainActor in
                 let suggestions = CaretHUDModel.shared.visibleSuggestions
-                guard index >= 0 && index < suggestions.count else { return false }
+                guard index >= 0 && index < suggestions.count else { return }
                 let chosen = suggestions[index]
                 let frame = self?.currentCaretPillFrame()
                 CaretHUDModel.shared.isApplyingSuggestion = true
@@ -223,8 +259,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 CaretHUDModel.shared.triggerSuggestionAcceptFeedback(for: chosen, caretFrame: frame) {
                     EventTapHook.shared.notifyTypingState()
                 }
-                return true
             }
+            return true
         }
 
         EventTapHook.shared.onDismissHUD = {
@@ -341,8 +377,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func currentCaretPillFrame() -> CGRect {
-        if let liveRect = CaretLocator.shared.findCaretScreenRect() {
+    private func currentCaretPillFrame(precomputedCaretRect: CGRect? = nil) -> CGRect {
+        if let liveRect = precomputedCaretRect ?? CaretLocator.shared.findCaretScreenRect() {
             lastCaretRect = liveRect
         }
         let caretPoint = CGPoint(x: lastCaretRect.midX, y: lastCaretRect.midY)
@@ -357,14 +393,74 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    @objc private func openSettingsMenuAction() {
+        BentoSettingsWindowController.shared.showWindow()
+    }
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // 1. Application Menu ("VFlow")
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu(title: "VFlow")
+        appMenu.addItem(withTitle: "Về VFlow", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        let settingsItem = NSMenuItem(title: "Cài đặt...", action: #selector(openSettingsMenuAction), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Ẩn VFlow", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = NSMenuItem(title: "Ẩn các ứng dụng khác", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(withTitle: "Hiện tất cả", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Thoát VFlow", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        // 2. Edit Menu ("Chỉnh sửa") — Standard First Responder routing for ⌘X, ⌘C, ⌘V, ⌘A, ⌘Z, ⇧⌘Z
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Chỉnh sửa")
+        editMenu.addItem(withTitle: "Hoàn tác", action: #selector(StandardEditActions.undo(_:)), keyEquivalent: "z")
+        let redoItem = NSMenuItem(title: "Làm lại", action: #selector(StandardEditActions.redo(_:)), keyEquivalent: "Z")
+        editMenu.addItem(redoItem)
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cắt", action: #selector(StandardEditActions.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Sao chép", action: #selector(StandardEditActions.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Dán", action: #selector(StandardEditActions.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Chọn tất cả", action: #selector(StandardEditActions.selectAll(_:)), keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
+        // 3. Window Menu ("Cửa sổ") — Standard ⌘W, ⌘M
+        let windowMenuItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Cửa sổ")
+        windowMenu.addItem(withTitle: "Thu nhỏ", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Thu phóng", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(NSMenuItem.separator())
+        windowMenu.addItem(withTitle: "Đóng cửa sổ", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowMenuItem.submenu = windowMenu
+        mainMenu.addItem(windowMenuItem)
+
+        NSApp.mainMenu = mainMenu
+        NSApp.windowsMenu = windowMenu
+    }
+
     private func presentCaretHUDAtFocusedElement(
         composingWord: String,
         rawWord: String,
         sentenceWords: [String],
         fullSentenceText: String = "",
-        wordAfterCursor: String = ""
+        wordAfterCursor: String = "",
+        precomputedCaretRect: CGRect? = nil
     ) {
-        let pillFrame = currentCaretPillFrame()
+        if BentoSettingsWindowController.shared.window?.isKeyWindow == true {
+            CaretHUDModel.shared.hideHUD()
+            return
+        }
+
+        let pillFrame = currentCaretPillFrame(precomputedCaretRect: precomputedCaretRect)
 
         CaretHUDModel.shared.updateOnTyping(
             currentWord: composingWord,

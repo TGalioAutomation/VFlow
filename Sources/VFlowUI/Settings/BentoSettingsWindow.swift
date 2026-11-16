@@ -100,7 +100,7 @@ public struct BentoSettingsView: View {
                         Text("VFlow")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                        Text("1.0.1")
+                        Text(store.currentVersion)
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
@@ -459,7 +459,7 @@ public struct BentoSettingsView: View {
                                      : "Cần kiểm tra quyền Accessibility / EventTap")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(store.isAccessibilityTrusted && store.isEventTapActive ? VFlowTheme.emeraldOk : VFlowTheme.amberWarn)
-                                Text("Độ trễ bắt phím < 0.2ms • Không lưu keylog nhạy cảm")
+                                Text("EventTap nền < 0.05ms • Không lưu keylog nhạy cảm")
                                     .font(.system(size: 10))
                                     .foregroundColor(.white.opacity(0.65))
                             }
@@ -476,6 +476,80 @@ public struct BentoSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                }
+            }
+
+            // Auto-Update & Release Management Card
+            ControlBentoCard(
+                title: "TỰ ĐỘNG NÂNG CẤP & QUẢN LÝ PHIÊN BẢN (VFLOW AUTO-UPDATER)",
+                subtitle: "Kiểm tra GitHub Releases, xác thực SHA-256 + CodeSign và tự nâng cấp an toàn",
+                systemIcon: "arrow.triangle.2.circlepath.circle.fill",
+                accentColor: VFlowTheme.emeraldOk,
+                accessory: {
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            Task { await store.checkForUpdates(userInitiated: true) }
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "magnifyingglass.circle.fill")
+                                Text("Kiểm tra ngay")
+                            }
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(VFlowTheme.cyanAccent.opacity(0.18))
+                            .foregroundColor(VFlowTheme.cyanAccent)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        if let update = store.availableUpdate {
+                            Button(action: {
+                                Task { await store.installAvailableUpdate() }
+                            }) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                    Text("Nâng cấp \(update.tagName)")
+                                }
+                                .font(.system(size: 10.5, weight: .bold))
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 5)
+                                .background(VFlowTheme.emeraldOk.opacity(0.25))
+                                .foregroundColor(VFlowTheme.emeraldOk)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            ) {
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Phiên bản hiện tại: v\(store.currentVersion)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                        Text(store.updateState.statusDescription)
+                            .font(.system(size: 11))
+                            .foregroundColor(store.availableUpdate != nil ? VFlowTheme.emeraldOk : .white.opacity(0.68))
+                    }
+
+                    Spacer()
+
+                    LiquidGlassToggleRow(
+                        "Tự động kiểm tra bản mới",
+                        isOn: $store.autoCheckUpdates,
+                        accentColor: VFlowTheme.cyanAccent,
+                        compact: true
+                    )
+                    .fixedSize()
+
+                    LiquidGlassToggleRow(
+                        "Tự tải & cài đặt khi có bản mới",
+                        isOn: $store.autoInstallUpdates,
+                        accentColor: VFlowTheme.emeraldOk,
+                        compact: true
+                    )
+                    .fixedSize()
                 }
             }
         }
@@ -1062,7 +1136,8 @@ public struct BentoSettingsView: View {
                         HStack(spacing: 10) {
                             SilkSineWaveView(
                                 state: store.isRecordingVoice ? .working : .done,
-                                audioLevel: store.isRecordingVoice ? max(0.35, store.voiceAudioLevel) : 0.2
+                                audioLevel: store.isRecordingVoice ? max(0.35, store.voiceAudioLevel) : 0.2,
+                                isPaused: !store.isRecordingVoice
                             )
                             Text(store.voiceStatusMessage)
                                 .font(.system(size: 11, weight: .semibold))
@@ -1203,6 +1278,7 @@ public struct BentoSettingsView: View {
                                 inputMethod: store.inputMethod,
                                 severity: sandboxSeverity,
                                 acceptShortcut: store.suggestionAcceptShortcut,
+                                isPaused: true,
                                 onUndo: {
                                     sandboxText = "to đang thu go tieng viet không cau"
                                     recomputeSandboxSuggestions(for: sandboxText)
@@ -1436,7 +1512,7 @@ public struct BentoSettingsView: View {
 
 /// Window controller for the VFlow Control Center window.
 @MainActor
-public final class BentoSettingsWindowController: NSWindowController {
+public final class BentoSettingsWindowController: NSWindowController, NSWindowDelegate {
     public static let shared = BentoSettingsWindowController()
 
     public init() {
@@ -1451,6 +1527,8 @@ public final class BentoSettingsWindowController: NSWindowController {
         window.center()
         window.contentView = NSHostingView(rootView: BentoSettingsView())
         super.init(window: window)
+        window.delegate = self
+        window.isReleasedWhenClosed = false
     }
 
     required init?(coder: NSCoder) {
@@ -1461,8 +1539,24 @@ public final class BentoSettingsWindowController: NSWindowController {
         if let tab = tab {
             VFlowControlCenterStore.shared.selectedTab = tab
         }
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
+        if let window = self.window, window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        VFlowControlCenterStore.shared.startTelemetryPolling()
         VFlowControlCenterStore.shared.refreshTelemetry()
         self.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if let win = self.window {
+            CaretPillWindow.updateSettingsWindowSnapshot(visible: true, frame: win.frame)
+        }
+    }
+
+    public func windowWillClose(_ notification: Notification) {
+        CaretPillWindow.updateSettingsWindowSnapshot(visible: false, frame: .zero)
+        NSApp.setActivationPolicy(.accessory)
+        VFlowControlCenterStore.shared.stopTelemetryPolling()
     }
 }

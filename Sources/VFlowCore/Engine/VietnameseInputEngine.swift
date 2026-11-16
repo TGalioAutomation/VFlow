@@ -25,41 +25,64 @@ public struct EngineResult: Equatable, Sendable {
 }
 
 /// Finite State Machine engine for Telex & VNI Vietnamese input.
+/// Thread-safe via internal recursive lock so dedicated EventTap threads and MainActor UI can interact concurrently without races.
 public final class VietnameseInputEngine: @unchecked Sendable {
-    public var inputMethod: InputMethod
-    public var tonePlacement: TonePlacement
-    public var autoEnglishRestore: Bool
+    private var _inputMethod: InputMethod
+    public var inputMethod: InputMethod {
+        get { lock.withLock { _inputMethod } }
+        set { lock.withLock { _inputMethod = newValue } }
+    }
 
-    // Internal state buffers
+    private var _tonePlacement: TonePlacement
+    public var tonePlacement: TonePlacement {
+        get { lock.withLock { _tonePlacement } }
+        set { lock.withLock { _tonePlacement = newValue } }
+    }
+
+    private var _autoEnglishRestore: Bool
+    public var autoEnglishRestore: Bool {
+        get { lock.withLock { _autoEnglishRestore } }
+        set { lock.withLock { _autoEnglishRestore = newValue } }
+    }
+
+    // Internal state buffers protected by `lock`
+    private let lock = NSRecursiveLock()
     private var rawBuffer: [Character] = []
     private var currentFormattedWord: String = ""
+    private var _previousWordWasEnglish: Bool = false
+
     /// Tracks whether the immediately preceding word was English to disambiguate short homographs (e.g. "is", "car", "var", "now").
-    public var previousWordWasEnglish: Bool = false
+    public var previousWordWasEnglish: Bool {
+        get { lock.withLock { _previousWordWasEnglish } }
+        set { lock.withLock { _previousWordWasEnglish = newValue } }
+    }
 
     public init(
         inputMethod: InputMethod = .telex,
         tonePlacement: TonePlacement = .modern,
         autoEnglishRestore: Bool = true
     ) {
-        self.inputMethod = inputMethod
-        self.tonePlacement = tonePlacement
-        self.autoEnglishRestore = autoEnglishRestore
+        self._inputMethod = inputMethod
+        self._tonePlacement = tonePlacement
+        self._autoEnglishRestore = autoEnglishRestore
     }
 
     /// Resets the internal state buffer.
     public func reset() {
-        rawBuffer.removeAll()
-        currentFormattedWord = ""
+        lock.withLock {
+            rawBuffer.removeAll()
+            currentFormattedWord = ""
+        }
     }
 
     /// Returns the current raw input buffer as a string.
     public var rawString: String {
-        String(rawBuffer)
+        lock.withLock { String(rawBuffer) }
     }
 
     /// Returns the current word as formatted by the engine.
     public var formattedWord: String {
-        currentFormattedWord
+        lock.withLock { currentFormattedWord }
     }
 
     /// Computes minimal backspace count and suffix replacement between oldDisplayed and newDisplayed.
@@ -78,52 +101,57 @@ public final class VietnameseInputEngine: @unchecked Sendable {
 
     /// Handles a backspace keystroke by deleting the last displayed character on screen and keeping the buffer in sync.
     public func handleBackspace() -> EngineResult {
-        guard !currentFormattedWord.isEmpty else {
-            reset()
-            return EngineResult(consumed: false)
-        }
+        lock.withLock {
+            guard !currentFormattedWord.isEmpty else {
+                rawBuffer.removeAll()
+                currentFormattedWord = ""
+                return EngineResult(consumed: false)
+            }
 
-        let newWord = String(currentFormattedWord.dropLast())
-        currentFormattedWord = newWord
-        rawBuffer = Array(newWord)
-        return EngineResult(consumed: false, backspaceCount: 0, replacementText: "", currentWord: newWord)
+            let newWord = String(currentFormattedWord.dropLast())
+            currentFormattedWord = newWord
+            rawBuffer = Array(newWord)
+            return EngineResult(consumed: false, backspaceCount: 0, replacementText: "", currentWord: newWord)
+        }
     }
 
     /// Processes a typed character.
     public func processKey(_ char: Character) -> EngineResult {
-        if inputMethod == .off {
-            return handlePassThrough(char)
-        }
+        lock.withLock {
+            if _inputMethod == .off {
+                return handlePassThrough(char)
+            }
 
-        // Word boundary delimiters: Space, Enter, tabs, punctuation
-        if isWordBoundary(char) {
-            return handleWordBoundary(char)
-        }
+            // Word boundary delimiters: Space, Enter, tabs, punctuation
+            if isWordBoundary(char) {
+                return handleWordBoundary(char)
+            }
 
-        let previousWord = currentFormattedWord
-        rawBuffer.append(char)
+            let previousWord = currentFormattedWord
+            rawBuffer.append(char)
 
-        let newWord = reprocess(rawBuffer)
-        currentFormattedWord = newWord
+            let newWord = reprocess(rawBuffer)
+            currentFormattedWord = newWord
 
-        if newWord != previousWord + String(char) {
-            // Modification took place (e.g. 'a' + 'a' -> 'â', or 'toan' + 's' -> 'toán')
-            let delta = Self.minimalDelta(from: previousWord, to: newWord)
+            if newWord != previousWord + String(char) {
+                // Modification took place (e.g. 'a' + 'a' -> 'â', or 'toan' + 's' -> 'toán')
+                let delta = Self.minimalDelta(from: previousWord, to: newWord)
+                return EngineResult(
+                    consumed: true,
+                    backspaceCount: delta.backspaces,
+                    replacementText: delta.replacement,
+                    currentWord: newWord
+                )
+            }
+
+            // Normal letter addition without transformation
             return EngineResult(
-                consumed: true,
-                backspaceCount: delta.backspaces,
-                replacementText: delta.replacement,
+                consumed: false,
+                backspaceCount: 0,
+                replacementText: "",
                 currentWord: newWord
             )
         }
-
-        // Normal letter addition without transformation
-        return EngineResult(
-            consumed: false,
-            backspaceCount: 0,
-            replacementText: "",
-            currentWord: newWord
-        )
     }
 
     // MARK: - Private Processing Logic
@@ -178,7 +206,9 @@ public final class VietnameseInputEngine: @unchecked Sendable {
             "muon": "muốn",
             "cung": "cũng",
             "nhieu": "nhiều",
-            "luon": "luôn"
+            "luon": "luôn",
+            "vieet": "việt",
+            "vaaf": "và"
         ]
         // Contextual Vietnamese unsigned words restored on Space when already in a Vietnamese sentence (!previousWordWasEnglish)
         let contextualVietnameseUnsignedMap: [String: String] = [
@@ -216,15 +246,20 @@ public final class VietnameseInputEngine: @unchecked Sendable {
             }
         }
 
-        let isEnglish = SmartEnglishDetector.isEnglishWord(rawWord, previousWordWasEnglish: previousWordWasEnglish)
+        let isEnglish = SmartEnglishDetector.isEnglishWord(rawWord, previousWordWasEnglish: _previousWordWasEnglish)
         let isValidVN = SyllableParser.isValidVietnameseSyllable(raw: rawWord, formatted: formatted, isWordBoundary: true)
         let hasDoubleEscape = Self.collapseDoubleTelexEscape(rawWord) != nil
+        let startsWithExplicitVietnameseD = formatted.lowercased().hasPrefix("đ")
         let shouldRestore: Bool = {
-            guard autoEnglishRestore && !hasDoubleEscape else { return false }
-            if inputMethod == .vni && rawWord.contains(where: { "123456789".contains($0) }) {
+            guard _autoEnglishRestore && !hasDoubleEscape else { return false }
+            if _inputMethod == .vni && rawWord.contains(where: { "123456789".contains($0) }) {
                 // In VNI mode, if the user explicitly typed numeric tone/modifier keys (e.g. a6 -> â, a8 -> ă, o7 -> ơ),
                 // do NOT restore on word boundary unless it's an explicit English word.
                 return isEnglish
+            }
+            if startsWithExplicitVietnameseD && !isEnglish {
+                // Never corrupt words starting with 'đ' (e.g. "đăt" from "ddawt") back into raw ASCII "ddawt "
+                return false
             }
             return isEnglish || !isValidVN
         }()
@@ -237,17 +272,17 @@ public final class VietnameseInputEngine: @unchecked Sendable {
             "she", "too", "use", "our", "in", "on", "at", "to", "of", "by", "if"
         ]
         if shouldRestore || isEnglish {
-            previousWordWasEnglish = true
+            _previousWordWasEnglish = true
         } else if formatted != rawWord {
             // Word was transformed with Vietnamese diacritics
-            previousWordWasEnglish = false
+            _previousWordWasEnglish = false
         } else if englishConnectors.contains(lowerRaw) {
             // Keep or activate English momentum on standard English articles/connectors
-            if previousWordWasEnglish || ["the", "and", "are", "you", "our"].contains(lowerRaw) {
-                previousWordWasEnglish = true
+            if _previousWordWasEnglish || ["the", "and", "are", "you", "our"].contains(lowerRaw) {
+                _previousWordWasEnglish = true
             }
         } else {
-            previousWordWasEnglish = false
+            _previousWordWasEnglish = false
         }
 
         // Auto-English Restore when pressing Space or punctuation
@@ -266,7 +301,7 @@ public final class VietnameseInputEngine: @unchecked Sendable {
     }
 
     private func isWordBoundary(_ ch: Character) -> Bool {
-        if inputMethod == .telex && ch.isNumber {
+        if _inputMethod == .telex && ch.isNumber {
             return true
         }
         return ch.isWhitespace || ch.isPunctuation || ch.isSymbol || ch.isMathSymbol || ch.isCurrencySymbol || ch.isNewline || ch == "\t" || ch == "\r"
@@ -274,13 +309,15 @@ public final class VietnameseInputEngine: @unchecked Sendable {
 
     /// Core deterministic transformation of a raw keystroke buffer into Vietnamese text.
     public func reprocess(_ rawChars: [Character]) -> String {
-        switch inputMethod {
-        case .telex:
-            return processTelex(rawChars)
-        case .vni:
-            return processVNI(rawChars)
-        case .off:
-            return String(rawChars)
+        lock.withLock {
+            switch _inputMethod {
+            case .telex:
+                return processTelex(rawChars)
+            case .vni:
+                return processVNI(rawChars)
+            case .off:
+                return String(rawChars)
+            }
         }
     }
 
@@ -336,7 +373,7 @@ public final class VietnameseInputEngine: @unchecked Sendable {
         }
 
         // 0b. Fast-path real-time English check (e.g. words starting with f, j, z, w+letter, st, sp, cl, cr, pr, or containing ea, ou, io, ss, ff, ll...)
-        if autoEnglishRestore && SmartEnglishDetector.isDefinitelyEnglishInProgress(rawString) {
+        if _autoEnglishRestore && SmartEnglishDetector.isDefinitelyEnglishInProgress(rawString) {
             return rawString
         }
 

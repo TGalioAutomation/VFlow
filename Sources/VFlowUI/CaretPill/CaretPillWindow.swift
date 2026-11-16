@@ -14,9 +14,43 @@ public final class FirstMouseHostingView<Content: View>: NSHostingView<Content> 
     }
 }
 
+/// Thread-safe lock-protected snapshot of Caret Pill HUD state so dedicated background EventTap threads
+/// can hit-test clicks and check active suggestion availability in <0.005ms without blocking on MainActor.
+public struct CaretHUDInteractionSnapshot: Sendable {
+    public var isHUDVisible: Bool = false
+    public var pillFrame: CGRect = .zero
+    public var visibleSuggestionsCount: Int = 0
+    public var isWorkingState: Bool = false
+    public var settingsWindowVisible: Bool = false
+    public var settingsWindowFrame: CGRect = .zero
+}
+
+/// Non-isolated lock storage for Caret HUD interaction state (safe for EventTap background thread).
+private enum CaretPillSnapshotStorage {
+    static let lock = NSLock()
+    nonisolated(unsafe) static var snapshot = CaretHUDInteractionSnapshot()
+}
+
 /// Non-activating floating NSPanel for displaying the Caret Pill HUD without stealing focus.
 public final class CaretPillWindow: NSPanel, @unchecked Sendable {
     public static let shared = CaretPillWindow()
+
+    public nonisolated static func updateSettingsWindowSnapshot(visible: Bool, frame: CGRect) {
+        CaretPillSnapshotStorage.lock.withLock {
+            CaretPillSnapshotStorage.snapshot.settingsWindowVisible = visible
+            CaretPillSnapshotStorage.snapshot.settingsWindowFrame = frame
+        }
+    }
+
+    public nonisolated static func currentInteractionSnapshot() -> CaretHUDInteractionSnapshot {
+        CaretPillSnapshotStorage.lock.withLock { CaretPillSnapshotStorage.snapshot }
+    }
+
+    fileprivate nonisolated static func mutateSnapshot(_ body: (inout CaretHUDInteractionSnapshot) -> Void) {
+        CaretPillSnapshotStorage.lock.withLock {
+            body(&CaretPillSnapshotStorage.snapshot)
+        }
+    }
 
     public init() {
         super.init(
@@ -27,7 +61,7 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
         )
 
         self.isFloatingPanel = true
-        self.level = .popUpMenu
+        self.level = .floating
         self.becomesKeyOnlyIfNeeded = true
         self.isOpaque = false
         self.backgroundColor = .clear
@@ -50,6 +84,25 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
     @MainActor
     public func handleMouseDown(atScreenPoint screenPoint: CGPoint) -> Bool {
         guard self.isVisible else { return false }
+
+        // A. If BentoSettingsWindow is visible and contains this click, dismiss HUD and never swallow
+        if let settingsWin = BentoSettingsWindowController.shared.window,
+           settingsWin.isVisible,
+           settingsWin.frame.contains(screenPoint) {
+            dismiss()
+            return false
+        }
+
+        // B. If click is in the Menu Bar top strip (y >= screen.maxY - 32), dismiss HUD and never swallow
+        let targetScreen = NSScreen.screens.first { NSPointInRect(screenPoint, $0.frame) } ?? NSScreen.main
+        if let screen = targetScreen {
+            let menuBarHeight: CGFloat = 32.0
+            if screenPoint.y >= screen.frame.maxY - menuBarHeight {
+                dismiss()
+                return false
+            }
+        }
+
         let winFrame = self.frame
         guard winFrame.insetBy(dx: -4, dy: -4).contains(screenPoint) else { return false }
 
@@ -96,21 +149,60 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
             height: dynamicHeight
         )
         self.setFrame(finalFrame, display: true, animate: false)
+        Self.mutateSnapshot { $0.pillFrame = finalFrame }
     }
 
     /// Positions and presents the Caret Pill HUD at the specified frame without activating the application,
     /// dynamically sizing width and height (including 2-Tier Card layout) to fit all suggestion text without truncation.
     public func present(at frame: CGRect) {
+        CaretHUDModel.shared.isHUDVisible = true
+        Self.mutateSnapshot { $0.isHUDVisible = true }
+        let beforeSize = self.frame.size
         applyFittingFrame(for: frame)
-        self.orderFrontRegardless()
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, self.isVisible else { return }
-            self.applyFittingFrame(for: frame)
+        let wasVisible = self.isVisible
+        if !wasVisible {
+            self.orderFrontRegardless()
         }
+        let afterSize = self.frame.size
+        if !wasVisible || abs(afterSize.width - beforeSize.width) > 2.0 || abs(afterSize.height - beforeSize.height) > 2.0 {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.isVisible else { return }
+                self.applyFittingFrame(for: frame)
+            }
+        }
+    }
+
+    /// Thread-safe, non-blocking mouse-down pre-check safe to call from `EventTapHook`'s dedicated background thread.
+    /// Returns `true` if the click falls inside the interactive Caret Pill HUD (and dispatches action on `@MainActor`).
+    public nonisolated static func threadSafeHandleMouseDown(atScreenPoint screenPoint: CGPoint) -> Bool {
+        let snap = currentInteractionSnapshot()
+        guard snap.isHUDVisible else { return false }
+
+        if snap.settingsWindowVisible && snap.settingsWindowFrame.contains(screenPoint) {
+            DispatchQueue.main.async {
+                CaretPillWindow.shared.dismiss()
+            }
+            return false
+        }
+
+        guard snap.pillFrame.insetBy(dx: -4, dy: -4).contains(screenPoint) else {
+            return false
+        }
+        DispatchQueue.main.async {
+            _ = CaretPillWindow.shared.handleMouseDown(atScreenPoint: screenPoint)
+        }
+        let isTopBarClick = screenPoint.y >= snap.pillFrame.maxY - 46.0
+        return snap.visibleSuggestionsCount > 0 || snap.isWorkingState || isTopBarClick
+    }
+
+    public nonisolated func threadSafeHandleMouseDown(atScreenPoint screenPoint: CGPoint) -> Bool {
+        Self.threadSafeHandleMouseDown(atScreenPoint: screenPoint)
     }
 
     /// Smoothly hides the Caret Pill HUD.
     public func dismiss() {
+        CaretHUDModel.shared.isHUDVisible = false
+        Self.mutateSnapshot { $0.isHUDVisible = false }
         self.orderOut(nil)
     }
 }
@@ -120,13 +212,32 @@ public final class CaretPillWindow: NSPanel, @unchecked Sendable {
 public final class CaretHUDModel: ObservableObject {
     public static let shared = CaretHUDModel()
 
-    @Published public var state: CaretPillState = .transcript
+    @Published public var isHUDVisible: Bool = false
+    @Published public var state: CaretPillState = .transcript {
+        didSet {
+            CaretPillWindow.mutateSnapshot { $0.isWorkingState = (state == .working) }
+        }
+    }
     @Published public var text: String = ""
     @Published public var currentWord: String = ""
     @Published public var suggestions: [SuggestionItem] = [] {
         didSet {
             chipFrames.removeAll()
+            let count = visibleSuggestions.count
+            CaretPillWindow.mutateSnapshot { $0.visibleSuggestionsCount = count }
         }
+    }
+
+    /// Thread-safe check callable from `EventTapHook`'s dedicated thread without blocking on MainActor.
+    public nonisolated static func threadSafeHasActiveSuggestions() -> Bool {
+        let snap = CaretPillWindow.currentInteractionSnapshot()
+        return snap.isHUDVisible && snap.visibleSuggestionsCount > 0
+    }
+
+    /// Thread-safe shortcut check callable from `EventTapHook`'s dedicated thread; triggers selection on `@MainActor` when matched.
+    public nonisolated static func threadSafeCanSelectSuggestion(at index: Int) -> Bool {
+        let snap = CaretPillWindow.currentInteractionSnapshot()
+        return snap.isHUDVisible && index >= 0 && index < snap.visibleSuggestionsCount
     }
     @Published public var audioLevel: Float = 0.35
     @Published public var currentTone: PolishTone = .natural
@@ -137,6 +248,16 @@ public final class CaretHUDModel: ObservableObject {
     @Published public var isApplyingSuggestion: Bool = false
     @Published public var isSuggestionAppliedSuccess: Bool = false
     @Published public var appliedSuggestionText: String = ""
+
+    /// Dynamically computes whether the SilkSineWaveView animation should be paused.
+    /// Halts 120 FPS CVDisplayLink render loop when HUD is hidden or motionless (audioLevel <= 0.25).
+    public var isWavePaused: Bool {
+        guard isHUDVisible else { return true }
+        if state == .transcript && audioLevel <= 0.25 {
+            return true
+        }
+        return false
+    }
 
     public var chipFrames: [Int: CGRect] = [:]
     public var modeButtonFrame: CGRect = .zero
@@ -308,7 +429,7 @@ public final class CaretHUDModel: ObservableObject {
             return true
         }
 
-        return true
+        return false
     }
 
     /// Triggers a 2-stage visual animation (`✨ Đang sửa văn bản...` -> `✓ Đã sửa văn bản`) when a suggestion is accepted via `⇥⇥`, `⌥1..3`, or mouse click.
@@ -431,7 +552,9 @@ public final class CaretHUDModel: ObservableObject {
             }
         }
 
-        self.suggestions = immediateSuggestions
+        if self.suggestions != immediateSuggestions {
+            self.suggestions = immediateSuggestions
+        }
 
         // Never show a blank "Đang gõ văn bản..." pill when both the text and suggestions are empty
         if fullSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -665,6 +788,7 @@ public final class CaretHUDModel: ObservableObject {
     }
 
     public func hideHUD() {
+        isHUDVisible = false
         autoHideTimer?.invalidate()
         autoHideTimer = nil
         CaretPillWindow.shared.dismiss()
@@ -718,6 +842,7 @@ public struct CaretHUDContainerView: View {
             isApplyingSuggestion: model.isApplyingSuggestion,
             isSuggestionAppliedSuccess: model.isSuggestionAppliedSuccess,
             appliedSuggestionText: model.appliedSuggestionText,
+            isPaused: model.isWavePaused,
             onUndo: { model.onUndo?() },
             onCycleTone: { model.onCycleTone?() },
             onSelectSuggestion: { item in model.onSelectSuggestion?(item) },

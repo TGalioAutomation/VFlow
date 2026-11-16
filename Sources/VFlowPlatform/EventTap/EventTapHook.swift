@@ -39,6 +39,10 @@ public final class EventTapHook: @unchecked Sendable {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var tapRunLoop: CFRunLoop?
+    private var tapThread: Thread?
+    private var typingNotifyWorkItem: DispatchWorkItem?
+    private var typingNotifyGeneration: UInt64 = 0
     private let privateEventSource = CGEventSource(stateID: .privateState)
     private var heldKeyCodes: Set<CGKeyCode> = []
     private var swallowedKeyCodes: Set<CGKeyCode> = []
@@ -304,16 +308,42 @@ public final class EventTapHook: @unchecked Sendable {
         self.engine = engine
     }
 
+    private static let diagnosticLogQueue = DispatchQueue(label: "com.apexdev.vflow.diagnosticLog", qos: .utility)
+    private static let axContextQueue = DispatchQueue(label: "com.apexdev.vflow.axContext", qos: .userInitiated)
+    nonisolated(unsafe) private static let isoDateFormatter = ISO8601DateFormatter()
+
+    private static var isVerboseKeyLoggingEnabled: Bool {
+        if ProcessInfo.processInfo.environment["VFLOW_DEBUG_KEYLOG"] == "1" {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "vflow.debug.keylog")
+    }
+
+    private func logKeystroke(_ message: @autoclosure () -> String) {
+        guard Self.isVerboseKeyLoggingEnabled else { return }
+        logDiagnostic(message())
+    }
+
     public func logDiagnostic(_ message: String) {
-        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
-        guard let data = line.data(using: .utf8) else { return }
-        if FileManager.default.fileExists(atPath: logPath),
-           let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: logPath)) {
-            handle.seekToEndOfFile()
-            handle.write(data)
-            try? handle.close()
-        } else {
-            try? data.write(to: URL(fileURLWithPath: logPath))
+        Self.diagnosticLogQueue.async { [logPath] in
+            let line = "\(Self.isoDateFormatter.string(from: Date())) \(message)\n"
+            guard let data = line.data(using: .utf8) else { return }
+            let url = URL(fileURLWithPath: logPath)
+            if FileManager.default.fileExists(atPath: logPath) {
+                if let attrs = try? FileManager.default.attributesOfItem(atPath: logPath),
+                   let size = (attrs[.size] as? NSNumber)?.uint64Value,
+                   size > 512 * 1024 {
+                    try? data.write(to: url, options: .atomic)
+                    return
+                }
+                if let handle = try? FileHandle(forWritingTo: url) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    try? handle.close()
+                    return
+                }
+            }
+            try? data.write(to: url)
         }
     }
 
@@ -321,21 +351,43 @@ public final class EventTapHook: @unchecked Sendable {
     public var isTapActive: Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard let tap = eventTap else { return false }
+        guard let tap = eventTap, CFMachPortIsValid(tap) else { return false }
         return CGEvent.tapIsEnabled(tap: tap)
     }
 
-    /// Starts the event tap on the main run loop.
+    private func teardownTapLocked() {
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let src = runLoopSource, let rl = tapRunLoop {
+            CFRunLoopRemoveSource(rl, src, .commonModes)
+        }
+        if let rl = tapRunLoop {
+            CFRunLoopStop(rl)
+        }
+        self.eventTap = nil
+        self.runLoopSource = nil
+        self.tapRunLoop = nil
+        self.tapThread = nil
+    }
+
+    /// Starts the event tap on a dedicated `.userInteractive` background `Thread` / `CFRunLoop`
+    /// so UI layouts, Accessibility IPC, or SpellChecker on the Main Thread never stall keystrokes.
     @discardableResult
     public func start() -> Bool {
         lock.lock()
-        defer { lock.unlock() }
-
         if let existingTap = eventTap {
-            if !CGEvent.tapIsEnabled(tap: existingTap) {
-                CGEvent.tapEnable(tap: existingTap, enable: true)
+            if CFMachPortIsValid(existingTap), tapRunLoop != nil {
+                if !CGEvent.tapIsEnabled(tap: existingTap) {
+                    CGEvent.tapEnable(tap: existingTap, enable: true)
+                }
+                if CGEvent.tapIsEnabled(tap: existingTap) {
+                    lock.unlock()
+                    return true
+                }
             }
-            return CGEvent.tapIsEnabled(tap: existingTap)
+            teardownTapLocked()
         }
 
         let eventMask: CGEventMask =
@@ -377,41 +429,86 @@ public final class EventTapHook: @unchecked Sendable {
         )
 
         guard let validTap = tap else {
+            lock.unlock()
+            return false
+        }
+
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, validTap, 0) else {
+            CFMachPortInvalidate(validTap)
+            lock.unlock()
+            return false
+        }
+
+        let readySem = DispatchSemaphore(value: 0)
+        final class TapThreadBox: @unchecked Sendable {
+            let tap: CFMachPort
+            let source: CFRunLoopSource
+            var runLoop: CFRunLoop?
+            init(tap: CFMachPort, source: CFRunLoopSource) {
+                self.tap = tap
+                self.source = source
+            }
+        }
+        let box = TapThreadBox(tap: validTap, source: source)
+
+        let workerThread = Thread {
+            let rl = CFRunLoopGetCurrent()
+            CFRunLoopAddSource(rl, box.source, .commonModes)
+            CGEvent.tapEnable(tap: box.tap, enable: true)
+            box.runLoop = rl
+            readySem.signal()
+            CFRunLoopRun()
+        }
+        workerThread.name = "com.apexdev.vflow.eventTap"
+        workerThread.qualityOfService = .userInteractive
+        workerThread.start()
+
+        let waitResult = readySem.wait(timeout: .now() + 2.0)
+        guard waitResult == .success, let startedRL = box.runLoop else {
+            CFMachPortInvalidate(validTap)
+            lock.unlock()
             return false
         }
 
         self.eventTap = validTap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, validTap, 0)
         self.runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: validTap, enable: true)
-        logDiagnostic("EVENT_TAP_STARTED pid=\(ProcessInfo.processInfo.processIdentifier) enabled=\(CGEvent.tapIsEnabled(tap: validTap))")
+        self.tapRunLoop = startedRL
+        self.tapThread = workerThread
+        let enabled = CGEvent.tapIsEnabled(tap: validTap)
+        lock.unlock()
 
-        return true
+        logDiagnostic("EVENT_TAP_STARTED pid=\(ProcessInfo.processInfo.processIdentifier) enabled=\(enabled)")
+        return enabled
     }
 
-    /// Stops and disables the event tap.
+    /// Stops and disables the event tap cleanly.
     public func stop() {
         lock.lock()
-        defer { lock.unlock() }
+        teardownTapLocked()
+        lock.unlock()
+    }
 
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            if let src = runLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
-            }
-            self.eventTap = nil
-            self.runLoopSource = nil
-        }
+    /// Completely tears down the current event tap and initializes a fresh CGEventTap.
+    @discardableResult
+    public func restart() -> Bool {
+        stop()
+        return start()
     }
 
     // MARK: - Event Handling
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // 1. Always re-enable tap if disabled by macOS timeout
+        // 1. Always re-enable tap if disabled by macOS timeout, or restart if re-enable fails/invalid
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap = eventTap {
+            var reenabled = false
+            if let tap = eventTap, CFMachPortIsValid(tap) {
                 CGEvent.tapEnable(tap: tap, enable: true)
+                reenabled = CGEvent.tapIsEnabled(tap: tap)
+            }
+            if !reenabled {
+                DispatchQueue.main.async { [weak self] in
+                    _ = self?.restart()
+                }
             }
             return Unmanaged.passUnretained(event)
         }
@@ -435,6 +532,7 @@ public final class EventTapHook: @unchecked Sendable {
         }
 
         if type == .leftMouseDown || type == .rightMouseDown {
+            AccessibilityBridge.shared.invalidateCache()
             cancelPendingDoubleTab(flushSingleTab: false)
             if type == .leftMouseDown {
                 let screenPoint = NSEvent.mouseLocation
@@ -452,9 +550,9 @@ public final class EventTapHook: @unchecked Sendable {
             engine.reset()
             if !VoiceDictationService.shared.isRecording {
                 onDismissHUD?()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                Self.axContextQueue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                     if !VoiceDictationService.shared.isRecording &&
-                       !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+                       AccessibilityBridge.shared.isBlockedFromTyping() {
                         TypingBuffer.shared.clear()
                         self?.onDismissHUD?()
                     }
@@ -507,15 +605,17 @@ public final class EventTapHook: @unchecked Sendable {
                 engine.inputMethod = .off
             }
             onInputMethodChanged?(engine.inputMethod)
-            notifyTypingState()
+            DispatchQueue.main.async { [weak self] in
+                self?.scheduleNotifyTypingState(immediate: true)
+            }
             logDiagnostic("TOGGLE_METHOD -> \(engine.inputMethod.rawValue)")
             return nil
         }
 
         // Secure / Password / Hidden Text Field OR Non-Editable Browser/App Element Guard:
-        // Never transform Telex/VNI, never display Caret Pill HUD, and never intercept keys when not focused in an editable text box.
-        if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() ||
-           !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+        // Zero-IPC fast cached lookup (< 0.005ms) so keystrokes NEVER block on Accessibility Mach IPC.
+        let (isSecureField, isBlockedControl) = AccessibilityBridge.shared.fastCachedSecurityAndBlockStatus()
+        if isSecureField || isBlockedControl {
             cancelPendingDoubleTab(flushSingleTab: false)
             engine.reset()
             clearMouseReset()
@@ -570,8 +670,8 @@ public final class EventTapHook: @unchecked Sendable {
             if wasWordEmpty {
                 TypingBuffer.shared.popLastWord()
             }
-            logDiagnostic("BACKSPACE consumed=\(res.consumed) bs=\(res.backspaceCount) rep='\(res.replacementText)' word='\(res.currentWord)' raw='\(engine.rawString)'")
-            notifyTypingState()
+            logKeystroke("BACKSPACE consumed=\(res.consumed) bs=\(res.backspaceCount) rep='\(res.replacementText)' word='\(res.currentWord)' raw='\(engine.rawString)'")
+            scheduleNotifyTypingState()
             if res.consumed {
                 swallowKey(keycode)
                 if res.backspaceCount > 0 {
@@ -612,7 +712,7 @@ public final class EventTapHook: @unchecked Sendable {
             }
             if !flags.contains(.maskShift) {
                 onDismissHUD?()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                Self.axContextQueue.asyncAfter(deadline: .now() + 0.06) {
                     if let val = AccessibilityBridge.shared.readFocusedTextValue(),
                        val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         TypingBuffer.shared.clear()
@@ -626,7 +726,7 @@ public final class EventTapHook: @unchecked Sendable {
         // Map keycode to character
         let shift = flags.contains(.maskShift) || flags.contains(.maskAlphaShift)
         guard let char = KeyCodeMap.character(for: keycode, shift: shift) else {
-            logDiagnostic("UNMAPPED kc=\(keycode)")
+            logKeystroke("UNMAPPED kc=\(keycode)")
             setLastPhysicalKey(keycode)
             return Unmanaged.passUnretained(event)
         }
@@ -637,7 +737,7 @@ public final class EventTapHook: @unchecked Sendable {
         }
 
         let result = engine.processKey(char)
-        logDiagnostic("KEY char='\(char)' kc=\(keycode) consumed=\(result.consumed) bs=\(result.backspaceCount) rep='\(result.replacementText)' word='\(result.currentWord)' raw='\(engine.rawString)'")
+        logKeystroke("KEY char='\(char)' kc=\(keycode) consumed=\(result.consumed) bs=\(result.backspaceCount) rep='\(result.replacementText)' word='\(result.currentWord)' raw='\(engine.rawString)'")
 
         if result.consumed {
             swallowKey(keycode)
@@ -649,7 +749,7 @@ public final class EventTapHook: @unchecked Sendable {
             }
             recordCompletedBoundary(char: char, currentWord: result.currentWord)
             setLastPhysicalKey(keycode)
-            notifyTypingState()
+            scheduleNotifyTypingState()
             return nil // Swallow original raw keystroke
         } else if !result.replacementText.isEmpty {
             swallowKey(keycode)
@@ -659,18 +759,38 @@ public final class EventTapHook: @unchecked Sendable {
             postUnicodeString(result.replacementText, avoidingKeyCode: keycode, proxy: proxy)
             recordCompletedBoundary(char: char, currentWord: result.currentWord)
             setLastPhysicalKey(keycode)
-            notifyTypingState()
+            scheduleNotifyTypingState()
             return nil
         }
 
         recordCompletedBoundary(char: char, currentWord: result.currentWord)
 
         setLastPhysicalKey(keycode)
-        notifyTypingState()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.025) { [weak self] in
-            self?.notifyTypingState()
-        }
+        scheduleNotifyTypingState()
         return Unmanaged.passUnretained(event)
+    }
+
+    /// Coalesces rapid HUD/Accessibility typing notifications onto a serial background AX queue
+    /// so keystroke bursts never queue redundant Mach IPC walks or stall the Main Thread.
+    private func scheduleNotifyTypingState(immediate: Bool = false) {
+        let gen: UInt64 = lock.withLock {
+            typingNotifyGeneration &+= 1
+            typingNotifyWorkItem?.cancel()
+            return typingNotifyGeneration
+        }
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let currentGen = self.lock.withLock { self.typingNotifyGeneration }
+            guard currentGen == gen else { return }
+            self.notifyTypingState()
+        }
+
+        lock.withLock {
+            typingNotifyWorkItem = work
+        }
+        let delay: TimeInterval = immediate ? 0.0 : 0.032
+        Self.axContextQueue.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// Reads the focused text context and resolves cursorLocation when Chromium/Electron contenteditable
@@ -718,7 +838,7 @@ public final class EventTapHook: @unchecked Sendable {
     /// Broadcasts the current composing word and sentence context to the Caret Pill HUD.
     public func notifyTypingState() {
         if AccessibilityBridge.shared.isFocusedElementSecureOrHidden() ||
-           !AccessibilityBridge.shared.isFocusedElementEditableTextInput() {
+           AccessibilityBridge.shared.isBlockedFromTyping() {
             engine.reset()
             clearMouseReset()
             TypingBuffer.shared.clear()

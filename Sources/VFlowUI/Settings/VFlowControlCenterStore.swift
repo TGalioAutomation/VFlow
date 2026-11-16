@@ -163,7 +163,23 @@ public final class VFlowControlCenterStore: ObservableObject {
         }
     }
 
+    @Published public var autoCheckUpdates: Bool {
+        didSet {
+            UserDefaults.standard.set(autoCheckUpdates, forKey: Keys.autoCheckUpdates)
+        }
+    }
+
+    @Published public var autoInstallUpdates: Bool {
+        didSet {
+            UserDefaults.standard.set(autoInstallUpdates, forKey: Keys.autoInstallUpdates)
+        }
+    }
+
     // MARK: - Live Telemetry State
+    @Published public private(set) var currentVersion: String = VFlowUpdater.currentAppVersion
+    @Published public private(set) var updateState: VFlowUpdateState = .idle
+    @Published public private(set) var availableUpdate: VFlowReleaseInfo? = nil
+    @Published public private(set) var lastUpdateCheckDate: Date? = nil
     @Published public private(set) var isAccessibilityTrusted: Bool = false
     @Published public private(set) var isEventTapActive: Bool = false
     @Published public private(set) var isNeuralEngineAvailable: Bool = false
@@ -203,6 +219,9 @@ public final class VFlowControlCenterStore: ObservableObject {
     @Published public private(set) var macroSuccessBanner: String? = nil
 
     private var telemetryTimer: Timer?
+    public var isTelemetryPollingActive: Bool {
+        telemetryTimer != nil
+    }
     private var isSyncingInternal = false
 
     private enum Keys {
@@ -217,7 +236,12 @@ public final class VFlowControlCenterStore: ObservableObject {
         static let useFMCLIEngine = "vflow.settings.useFMCLIEngine.v1"
         static let dictationLanguage = "vflow.settings.dictationLanguage.v2"
         static let voiceSimulationMode = "vflow.settings.voiceSimulationMode.v3"
+        static let autoCheckUpdates = "vflow.settings.autoCheckUpdates.v1"
+        static let autoInstallUpdates = "vflow.settings.autoInstallUpdates.v1"
+        static let lastUpdateCheckTimestamp = "vflow.settings.lastUpdateCheckTimestamp.v1"
     }
+
+    private var periodicUpdateTimer: Timer?
 
     public init() {
         let defaults = UserDefaults.standard
@@ -233,6 +257,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         let savedUseFMCLI = defaults.object(forKey: Keys.useFMCLIEngine) as? Bool ?? false
         let savedDictationLang = defaults.string(forKey: Keys.dictationLanguage) ?? "vi-VN"
         let savedVoiceSim = defaults.object(forKey: Keys.voiceSimulationMode) as? Bool ?? false
+        let savedAutoCheckUpdates = defaults.object(forKey: Keys.autoCheckUpdates) as? Bool ?? true
+        let savedAutoInstallUpdates = defaults.object(forKey: Keys.autoInstallUpdates) as? Bool ?? false
+        let lastCheckTs = defaults.double(forKey: Keys.lastUpdateCheckTimestamp)
 
         self.inputMethod = savedMethod
         self.tonePlacement = savedPlacement
@@ -246,6 +273,9 @@ public final class VFlowControlCenterStore: ObservableObject {
         self.useFMCLIEngine = savedUseFMCLI && OnDeviceAIEngine.isFMCLIAvailable
         self.dictationLanguage = savedDictationLang
         self.voiceSimulationMode = savedVoiceSim
+        self.autoCheckUpdates = savedAutoCheckUpdates
+        self.autoInstallUpdates = savedAutoInstallUpdates
+        self.lastUpdateCheckDate = lastCheckTs > 0 ? Date(timeIntervalSince1970: lastCheckTs) : nil
         self.macros = CustomMacroRegistry.shared.allItems()
 
         // Apply loaded settings immediately to runtime services
@@ -268,7 +298,6 @@ public final class VFlowControlCenterStore: ObservableObject {
 
         refreshTelemetry()
         updatePromptTokenCount()
-        startTelemetryPolling()
     }
 
     public func selectSystemPromptPreset(_ preset: SystemPromptPreset) {
@@ -318,6 +347,11 @@ public final class VFlowControlCenterStore: ObservableObject {
                 self?.refreshTelemetry()
             }
         }
+    }
+
+    public func stopTelemetryPolling() {
+        telemetryTimer?.invalidate()
+        telemetryTimer = nil
     }
 
     public func refreshTelemetry() {
@@ -379,14 +413,30 @@ public final class VFlowControlCenterStore: ObservableObject {
         }
     }
 
+    /// Resets macOS Accessibility & Input Monitoring TCC permissions for VFlow to clear stale/corrupt permission database records.
+    public func resetTCCPermissions() {
+        for service in ["Accessibility", "ListenEvent"] {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            process.arguments = ["reset", service, "com.apexdev.vflow"]
+            try? process.run()
+            process.waitUntilExit()
+        }
+    }
+
     /// Attempts to start/restart the CGEventTap or prompts macOS Accessibility settings if permission is missing.
     public func repairPermissionsAndEventTap() {
         let trusted = AccessibilityBridge.shared.isAccessibilityGranted(prompt: true)
         isAccessibilityTrusted = trusted
-        if !EventTapHook.shared.isTapActive {
-            _ = EventTapHook.shared.start()
-        }
+        _ = EventTapHook.shared.restart()
         isEventTapActive = EventTapHook.shared.isTapActive
+
+        if !isEventTapActive && !trusted {
+            resetTCCPermissions()
+            _ = AccessibilityBridge.shared.isAccessibilityGranted(prompt: true)
+            _ = EventTapHook.shared.restart()
+            isEventTapActive = EventTapHook.shared.isTapActive
+        }
 
         if trusted && isEventTapActive {
             showTemporaryBanner("Đã kích hoạt thành công Accessibility & CGEventTap!")
@@ -397,6 +447,74 @@ public final class VFlowControlCenterStore: ObservableObject {
             showTemporaryBanner("Đã mở Cài đặt Quyền riêng tư & Bảo mật (Accessibility).")
         } else {
             showTemporaryBanner("Đang khởi động lại bộ bắt phím hệ thống...")
+        }
+    }
+
+    // MARK: - Auto-Update & Self-Upgrade Engine
+
+    public func scheduleAutomaticUpdateCheckIfNeeded() {
+        periodicUpdateTimer?.invalidate()
+        periodicUpdateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, self.autoCheckUpdates else { return }
+                await self.checkForUpdates(userInitiated: false)
+            }
+        }
+        guard autoCheckUpdates else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+            guard let self = self, self.autoCheckUpdates else { return }
+            if let last = self.lastUpdateCheckDate, Date().timeIntervalSince(last) < 1800 {
+                return
+            }
+            Task { @MainActor in
+                await self.checkForUpdates(userInitiated: false)
+            }
+        }
+    }
+
+    public func checkForUpdates(userInitiated: Bool = true) async {
+        if case .checking = updateState { return }
+        if case .downloading = updateState { return }
+        if case .installing = updateState { return }
+
+        updateState = .checking
+        let result = await VFlowUpdater.shared.checkLatestRelease(currentVersion: currentVersion)
+        let now = Date()
+        lastUpdateCheckDate = now
+        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Keys.lastUpdateCheckTimestamp)
+
+        updateState = result
+        switch result {
+        case .available(let release):
+            availableUpdate = release
+            if autoInstallUpdates {
+                await installAvailableUpdate()
+            } else if userInitiated {
+                showTemporaryBanner("Đã phát hiện phiên bản mới \(release.tagName)! Nhấn 'Nâng cấp ngay' để tự động cài đặt.")
+            }
+        case .upToDate(let current):
+            availableUpdate = nil
+            if userInitiated {
+                showTemporaryBanner("VFlow v\(current) đang là phiên bản mới nhất!")
+            }
+        case .failed(let msg):
+            if userInitiated {
+                showTemporaryBanner("Không thể kiểm tra cập nhật: \(msg)")
+            }
+        default:
+            break
+        }
+    }
+
+    public func installAvailableUpdate() async {
+        guard let release = availableUpdate else { return }
+        await VFlowUpdater.shared.downloadAndInstall(release: release) { [weak self] newState in
+            Task { @MainActor in
+                self?.updateState = newState
+                if case .failed(let msg) = newState {
+                    self?.showTemporaryBanner("Nâng cấp thất bại: \(msg)")
+                }
+            }
         }
     }
 

@@ -276,6 +276,31 @@ public struct BentoMenuView: View {
 
             Divider().background(Color.white.opacity(0.10))
 
+            // Optional Live Update Banner
+            if let update = store.availableUpdate {
+                Button(action: {
+                    Task { await store.installAvailableUpdate() }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(VFlowTheme.emeraldOk)
+                        Text("Có bản mới \(update.tagName) — Bấm nâng cấp ngay")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(VFlowTheme.emeraldOk.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(VFlowTheme.emeraldOk.opacity(0.45), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
             // Footer / Quit
             Button(action: onQuit) {
                 HStack {

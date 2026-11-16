@@ -17,6 +17,7 @@ public struct CaretPillView: View {
     public var isApplyingSuggestion: Bool
     public var isSuggestionAppliedSuccess: Bool
     public var appliedSuggestionText: String
+    public var isPaused: Bool
     public var onUndo: () -> Void
     public var onCycleTone: () -> Void
     public var onSelectSuggestion: (SuggestionItem) -> Void
@@ -40,6 +41,7 @@ public struct CaretPillView: View {
         isApplyingSuggestion: Bool = false,
         isSuggestionAppliedSuccess: Bool = false,
         appliedSuggestionText: String = "",
+        isPaused: Bool = false,
         onUndo: @escaping () -> Void = {},
         onCycleTone: @escaping () -> Void = {},
         onSelectSuggestion: @escaping (SuggestionItem) -> Void = { _ in },
@@ -62,6 +64,7 @@ public struct CaretPillView: View {
         self.isApplyingSuggestion = isApplyingSuggestion
         self.isSuggestionAppliedSuccess = isSuggestionAppliedSuccess
         self.appliedSuggestionText = appliedSuggestionText
+        self.isPaused = isPaused
         self.onUndo = onUndo
         self.onCycleTone = onCycleTone
         self.onSelectSuggestion = onSelectSuggestion
@@ -156,7 +159,8 @@ public struct CaretPillView: View {
             SilkSineWaveView(
                 state: state,
                 audioLevel: audioLevel,
-                severity: effectiveSeverity
+                severity: effectiveSeverity,
+                isPaused: isPaused
             )
             .padding(.leading, 8)
 
@@ -257,7 +261,8 @@ public struct CaretPillView: View {
                 SilkSineWaveView(
                     state: state,
                     audioLevel: audioLevel,
-                    severity: effectiveSeverity
+                    severity: effectiveSeverity,
+                    isPaused: isPaused
                 )
 
                 modeToggleButton(pillAccent: pillAccent)

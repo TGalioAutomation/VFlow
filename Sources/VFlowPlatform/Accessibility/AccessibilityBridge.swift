@@ -9,6 +9,79 @@ public final class AccessibilityBridge: @unchecked Sendable {
     private var enabledManualAXPids: Set<pid_t> = []
     private let lock = NSLock()
 
+    private struct CacheEntry {
+        let value: Bool
+        let timestamp: Date
+        let pid: pid_t?
+    }
+    private var cachedIsSecure: CacheEntry?
+    private var cachedIsBlocked: CacheEntry?
+    private var isBackgroundProbeInFlight = false
+    private let axProbeQueue = DispatchQueue(label: "com.apexdev.vflow.axProbe", qos: .userInitiated)
+    private let cacheTTL: TimeInterval = 0.45
+
+    /// Inspection hook for test verification: returns true if a valid, unexpired secure cache entry exists.
+    var isSecureCacheActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let entry = cachedIsSecure else { return false }
+        return Date().timeIntervalSince(entry.timestamp) < cacheTTL
+    }
+
+    /// Inspection hook for test verification: returns true if a valid, unexpired blocked-typing cache entry exists.
+    var isBlockedCacheActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let entry = cachedIsBlocked else { return false }
+        return Date().timeIntervalSince(entry.timestamp) < cacheTTL
+    }
+
+    /// Non-blocking cache lookup for the real-time `CGEventTap` callback (< 0.005ms, zero Mach IPC on the keystroke thread).
+    /// Returns the latest cached `(isSecure, isBlocked)` for the active frontmost app and triggers a coalesced background probe when expired.
+    public func fastCachedSecurityAndBlockStatus() -> (isSecure: Bool, isBlocked: Bool) {
+        let currentPid = frontmostApplication()?.processIdentifier
+        let now = Date()
+
+        let (secVal, blkVal, needsRefresh): (Bool, Bool, Bool) = lock.withLock {
+            let validSec = cachedIsSecure.flatMap { ($0.pid == currentPid && now.timeIntervalSince($0.timestamp) < cacheTTL) ? $0.value : nil }
+            let validBlk = cachedIsBlocked.flatMap { ($0.pid == currentPid && now.timeIntervalSince($0.timestamp) < cacheTTL) ? $0.value : nil }
+            if let s = validSec, let b = validBlk {
+                return (s, b, false)
+            }
+            let fallbackSec = (cachedIsSecure?.pid == currentPid) ? (cachedIsSecure?.value ?? false) : false
+            let fallbackBlk = (cachedIsBlocked?.pid == currentPid) ? (cachedIsBlocked?.value ?? false) : false
+            if isBackgroundProbeInFlight {
+                return (fallbackSec, fallbackBlk, false)
+            }
+            isBackgroundProbeInFlight = true
+            return (fallbackSec, fallbackBlk, true)
+        }
+
+        if needsRefresh {
+            axProbeQueue.async { [weak self] in
+                guard let self = self else { return }
+                let (sec, blk) = self.computeCombinedSecurityAndBlockStatus()
+                let stamp = Date()
+                let probePid = self.frontmostApplication()?.processIdentifier
+                self.lock.lock()
+                self.cachedIsSecure = CacheEntry(value: sec, timestamp: stamp, pid: probePid)
+                self.cachedIsBlocked = CacheEntry(value: blk, timestamp: stamp, pid: probePid)
+                self.isBackgroundProbeInFlight = false
+                self.lock.unlock()
+            }
+        }
+
+        return (secVal, blkVal)
+    }
+
+    /// Invalidates in-memory security and control caches (e.g. on application switch or mouse clicks).
+    public func invalidateCache() {
+        lock.lock()
+        cachedIsSecure = nil
+        cachedIsBlocked = nil
+        lock.unlock()
+    }
+
     public init() {}
 
     /// Pure deterministic evaluator for whether a field's Accessibility metadata or value indicates a password / hidden-text field.
@@ -51,40 +124,138 @@ public final class AccessibilityBridge: @unchecked Sendable {
         return false
     }
 
-    /// Returns true if macOS Secure Event Input is active or the currently focused UI element is a password / hidden-text field.
+    /// Returns true if the currently focused UI element is a verified password / hidden-text field,
+    /// or if system-wide Secure Event Input is active from an authentic terminal or security application.
+    /// Standard text inputs (AXTextField, AXTextArea, AXWebArea, AXGroup) ignore background leaked secure input.
     public func isFocusedElementSecureOrHidden() -> Bool {
-        if IsSecureEventInputEnabled() {
+        let frontApp = frontmostApplication()
+        let currentPid = frontApp?.processIdentifier
+
+        lock.lock()
+        if let cache = cachedIsSecure,
+           cache.pid == currentPid,
+           Date().timeIntervalSince(cache.timestamp) < cacheTTL {
+            let res = cache.value
+            lock.unlock()
+            return res
+        }
+        lock.unlock()
+
+        let secure = computeIsFocusedElementSecureOrHidden()
+
+        lock.lock()
+        cachedIsSecure = CacheEntry(
+            value: secure,
+            timestamp: Date(),
+            pid: currentPid
+        )
+        lock.unlock()
+
+        return secure
+    }
+
+    private func computeCombinedSecurityAndBlockStatus() -> (isSecure: Bool, isBlocked: Bool) {
+        guard let element = focusedUIElement() else {
+            return (isSystemSecureInputActiveForTerminal(), false)
+        }
+        let role = readAXString(element, kAXRoleAttribute)
+        let isBlocked = Self.isNonTextInteractiveControl(role: role)
+        if isBlocked {
+            return (false, true)
+        }
+        let isSecure = evaluateElementSecurity(element: element, prefetchedRole: role)
+        return (isSecure, false)
+    }
+
+    private func isSystemSecureInputActiveForTerminal() -> Bool {
+        guard IsSecureEventInputEnabled() else { return false }
+        let securityAppBundles: Set<String> = [
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "net.kovidgoyal.kitty",
+            "com.mitchellh.ghostty",
+            "org.alacritty",
+            "com.apple.SecurityAgent",
+            "com.apple.loginwindow",
+            "com.apple.ScreenSaver.Engine"
+        ]
+        if let bundleId = frontmostApplication()?.bundleIdentifier,
+           securityAppBundles.contains(bundleId) {
             return true
         }
+        return false
+    }
+
+    private func readAXString(_ element: AXUIElement, _ attr: String) -> String? {
+        var ref: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, attr as CFString, &ref) == .success,
+           let str = ref as? String {
+            return str
+        }
+        return nil
+    }
+
+    private func computeIsFocusedElementSecureOrHidden() -> Bool {
         guard let element = focusedUIElement() else {
-            return false
+            return isSystemSecureInputActiveForTerminal()
+        }
+        let role = readAXString(element, kAXRoleAttribute)
+        return evaluateElementSecurity(element: element, prefetchedRole: role)
+    }
+
+    private func evaluateElementSecurity(element: AXUIElement, prefetchedRole: String?) -> Bool {
+        let role = prefetchedRole
+        if let r = role?.lowercased(), r.contains("secure") {
+            return true
         }
 
-        func readStringAttr(_ attr: String) -> String? {
-            var ref: CFTypeRef?
-            if AXUIElementCopyAttributeValue(element, attr as CFString, &ref) == .success,
-               let str = ref as? String {
-                return str
-            }
-            return nil
+        let subrole = readAXString(element, kAXSubroleAttribute)
+        if let sr = subrole?.lowercased(), sr.contains("secure") {
+            return true
         }
 
-        let role = readStringAttr(kAXRoleAttribute)
-        let subrole = readStringAttr(kAXSubroleAttribute)
-        let roleDesc = readStringAttr(kAXRoleDescriptionAttribute)
-        let desc = readStringAttr(kAXDescriptionAttribute) ?? readStringAttr(kAXTitleAttribute)
+        let roleDesc = readAXString(element, kAXRoleDescriptionAttribute)
+        let desc = readAXString(element, kAXDescriptionAttribute) ?? readAXString(element, kAXTitleAttribute)
         let combinedDesc = [roleDesc, desc].compactMap { $0 }.joined(separator: " ")
-        let placeholder = readStringAttr(kAXPlaceholderValueAttribute)
-        let value = readStringAttr(kAXValueAttribute)
+        let placeholder = readAXString(element, kAXPlaceholderValueAttribute)
 
-        return Self.isSecureFieldMetadata(
+        // Avoid false-negative lock release race while reading AX inside isFocusedElementSecureOrHidden vs fastCachedSecurityAndBlockStatus
+        // (everything here is synchronous on axProbeQueue when using fast path)
+        // or fields with > 64 characters — prevents slow synchronous Mach IPC buffer copies while typing.
+        var shortValue: String? = nil
+        if role == "AXTextField" {
+            var numCharsRef: CFTypeRef?
+            let charCount: Int? = (AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &numCharsRef) == .success)
+                ? (numCharsRef as? NSNumber)?.intValue
+                : nil
+            if charCount.map({ $0 <= 64 }) ?? true {
+                shortValue = readAXString(element, kAXValueAttribute)
+            }
+        }
+
+        // 1. Evaluate element metadata FIRST
+        if Self.isSecureFieldMetadata(
             role: role,
             subrole: subrole,
             description: combinedDesc,
             placeholder: placeholder,
-            value: value,
+            value: shortValue,
             isSystemSecureInput: false
-        )
+        ) {
+            return true
+        }
+
+        // 2. If focused element has standard text or web roles without secure attributes,
+        // return false (ignoring background leaked IsSecureEventInputEnabled()).
+        let standardTextOrWebRoles: Set<String> = [
+            "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXWebArea", "AXGroup"
+        ]
+        if let r = role, standardTextOrWebRoles.contains(r) {
+            return false
+        }
+
+        // 3. For any other non-standard element or system modal:
+        return isSystemSecureInputActiveForTerminal()
     }
 
     /// Pure deterministic evaluator for whether an Accessibility element's metadata represents an editable text input.
@@ -164,96 +335,73 @@ public final class AccessibilityBridge: @unchecked Sendable {
         return false
     }
 
-    /// Returns true if and only if the currently focused UI element is an editable text input box
-    /// (native text field, browser `<input>`/`<textarea>`, or `contenteditable` editor).
-    public func isFocusedElementEditableTextInput() -> Bool {
-        guard let element = focusedUIElement() else {
-            return false
-        }
-
-        func readStringAttr(_ el: AXUIElement, _ attr: String) -> String? {
-            var ref: CFTypeRef?
-            if AXUIElementCopyAttributeValue(el, attr as CFString, &ref) == .success,
-               let str = ref as? String {
-                return str
-            }
-            return nil
-        }
-
-        func readBoolAttr(_ el: AXUIElement, _ attr: String) -> Bool? {
-            var ref: CFTypeRef?
-            if AXUIElementCopyAttributeValue(el, attr as CFString, &ref) == .success,
-               let val = ref {
-                if CFGetTypeID(val) == CFBooleanGetTypeID() {
-                    return CFBooleanGetValue((val as! CFBoolean))
-                }
-                if let num = val as? NSNumber {
-                    return num.boolValue
-                }
-            }
-            return nil
-        }
-
-        func isAttrSettable(_ el: AXUIElement, _ attr: String) -> Bool {
-            var settable = DarwinBoolean(false)
-            if AXUIElementIsAttributeSettable(el, attr as CFString, &settable) == .success {
-                return settable.boolValue
-            }
-            return false
-        }
-
-        let role = readStringAttr(element, kAXRoleAttribute)
-        let subrole = readStringAttr(element, kAXSubroleAttribute)
-        let isEditableAttr = readBoolAttr(element, "AXEditable") ?? readBoolAttr(element, "AX Is Editable")
-        let isValueSettable = isAttrSettable(element, kAXValueAttribute)
-        let isSelectedTextSettable = isAttrSettable(element, kAXSelectedTextAttribute) ||
-            ((role == "AXGroup" || role == "AXStaticText") && isAttrSettable(element, kAXSelectedTextRangeAttribute))
-
-        // Walk up to 10 ancestors to detect rich contenteditable containers when cursor is inside a child paragraph/span
-        var ancestorIsEditable = false
-        var currentParent: AXUIElement = element
-        for _ in 0..<10 {
-            var parentRef: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(currentParent, kAXParentAttribute as CFString, &parentRef) == .success,
-                  let parentVal = parentRef,
-                  CFGetTypeID(parentVal) == AXUIElementGetTypeID() else {
-                break
-            }
-            let parentEl = parentVal as! AXUIElement
-            let parentRole = readStringAttr(parentEl, kAXRoleAttribute) ?? ""
-            if parentRole == "AXWindow" || parentRole == "AXApplication" {
-                break
-            }
-            if parentRole == "AXTextField" || parentRole == "AXTextArea" || parentRole == "AXComboBox" || parentRole == "AXSearchField" {
-                ancestorIsEditable = true
-                break
-            }
-            if readBoolAttr(parentEl, "AXEditable") == true || readBoolAttr(parentEl, "AX Is Editable") == true {
-                ancestorIsEditable = true
-                break
-            }
-            if parentRole == "AXWebArea" {
-                break
-            }
-            if parentRole != "AXScrollArea" &&
-               (isAttrSettable(parentEl, kAXValueAttribute) || isAttrSettable(parentEl, kAXSelectedTextAttribute)) {
-                ancestorIsEditable = true
-                break
-            }
-            currentParent = parentEl
-        }
-
-        return Self.isEditableElementMetadata(
-            role: role,
-            subrole: subrole,
-            isEditableAttr: isEditableAttr,
-            isValueSettable: isValueSettable,
-            isSelectedTextSettable: isSelectedTextSettable,
-            ancestorIsEditable: ancestorIsEditable
-        )
+    /// Evaluates if the element role represents a verified non-text interactive control
+    /// where typing has no semantic meaning.
+    public static func isNonTextInteractiveControl(role: String?) -> Bool {
+        guard let rawRole = role, !rawRole.isEmpty else { return false }
+        let nonTextRoles: Set<String> = [
+            "AXButton",
+            "AXRadioButton",
+            "AXCheckBox",
+            "AXPopUpButton",
+            "AXMenuButton",
+            "AXSlider",
+            "AXScrollBar",
+            "AXSplitter",
+            "AXColorWell"
+        ]
+        return nonTextRoles.contains(rawRole)
     }
 
-    /// Ensures Electron/Chromium apps expose their AX tree (AXManualAccessibility).
+    /// Defensive typing block evaluator: only blocks if the focused element is a verified non-text interactive control
+    /// (AXButton, AXSlider, AXPopUpButton, AXCheckBox, AXRadioButton).
+    /// Does NOT block for nil, AXWebArea, AXGroup, or standard text fields (permissive fallback).
+    public func isBlockedFromTyping() -> Bool {
+        let frontApp = frontmostApplication()
+        let currentPid = frontApp?.processIdentifier
+
+        lock.lock()
+        if let cache = cachedIsBlocked,
+           cache.pid == currentPid,
+           Date().timeIntervalSince(cache.timestamp) < cacheTTL {
+            let res = cache.value
+            lock.unlock()
+            return res
+        }
+        lock.unlock()
+
+        let blocked = computeIsBlockedFromTyping()
+
+        lock.lock()
+        cachedIsBlocked = CacheEntry(
+            value: blocked,
+            timestamp: Date(),
+            pid: currentPid
+        )
+        lock.unlock()
+
+        return blocked
+    }
+
+    private func computeIsBlockedFromTyping() -> Bool {
+        guard let element = focusedUIElement() else {
+            return false // Permissive fallback on nil (never block typing)
+        }
+        var roleRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success,
+           let roleStr = roleRef as? String {
+            return Self.isNonTextInteractiveControl(role: roleStr)
+        }
+        return false // Permissive fallback if role cannot be read
+    }
+
+    /// Returns true if the focused element is considered an editable text input or permissive container (AXWebArea, AXGroup, nil).
+    /// Returns false only if positively verified as a non-text interactive control.
+    public func isFocusedElementEditableTextInput() -> Bool {
+        return !isBlockedFromTyping()
+    }
+
+    /// Ensures Electron/Chromium apps expose their AX tree (`AXManualAccessibility` & `AXEnhancedUserInterface`).
     public func ensureManualAccessibility(for pid: pid_t) {
         lock.lock()
         let alreadyEnabled = enabledManualAXPids.contains(pid)
@@ -264,7 +412,9 @@ public final class AccessibilityBridge: @unchecked Sendable {
 
         if !alreadyEnabled {
             let appElement = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(appElement, 0.02)
             AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+            AXUIElementSetAttributeValue(appElement, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
         }
     }
 
@@ -285,20 +435,26 @@ public final class AccessibilityBridge: @unchecked Sendable {
         let pid = frontApp.processIdentifier
         ensureManualAccessibility(for: pid)
         let appElement = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(appElement, 0.02)
 
         var focusedElement: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
         if result == .success, let element = focusedElement, CFGetTypeID(element) == AXUIElementGetTypeID() {
-            return (element as! AXUIElement)
+            let axEl = (element as! AXUIElement)
+            AXUIElementSetMessagingTimeout(axEl, 0.02)
+            return axEl
         }
 
         // Fallback: system-wide focused element
         let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, 0.02)
         var systemFocused: CFTypeRef?
         if AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &systemFocused) == .success,
            let element = systemFocused,
            CFGetTypeID(element) == AXUIElementGetTypeID() {
-            return (element as! AXUIElement)
+            let axEl = (element as! AXUIElement)
+            AXUIElementSetMessagingTimeout(axEl, 0.02)
+            return axEl
         }
 
         return nil

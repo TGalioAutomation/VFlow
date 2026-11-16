@@ -13,15 +13,18 @@ public struct SilkSineWaveView: View {
     public var state: CaretPillState
     public var audioLevel: Float
     public var severity: SuggestionSeverity
+    public var isPaused: Bool
 
     public init(
         state: CaretPillState = .transcript,
         audioLevel: Float = 0.5,
-        severity: SuggestionSeverity = .normal
+        severity: SuggestionSeverity = .normal,
+        isPaused: Bool = false
     ) {
         self.state = state
         self.audioLevel = audioLevel
         self.severity = severity
+        self.isPaused = isPaused
     }
 
     private var primaryWaveColor: Color {
@@ -64,8 +67,8 @@ public struct SilkSineWaveView: View {
         let primaryColor = primaryWaveColor
         let secondaryColor = secondaryWaveColor
 
-        TimelineView(.animation) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(paused: isPaused)) { timeline in
+            let time = isPaused ? 0.0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 let w = size.width
                 let h = size.height
